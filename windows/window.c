@@ -4642,6 +4642,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	 * foul it up when Alt is pressed, for some reason.)
 	 */
 	if (wParam == VK_RETURN) {     /* Return */
+	    if ((shift_state & 2) && !left_alt) /* Ctrl Return */
+		*p++ = 0x1B;
 	    *p++ = 0x0D;
 	    *p++ = 0;
 	    return -2;
