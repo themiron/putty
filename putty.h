@@ -868,6 +868,8 @@ void cleanup_exit(int);
     X(INT, NONE, shadowboldoffset) \
     X(INT, NONE, crhaslf) \
     X(STR, NONE, winclass) \
+    X(INT, NONE, no_ctrl_page) /* is it special? */ \
+    X(INT, NONE, no_shift_page) /* is it special? */ \
 
 /* Now define the actual enum of option keywords using that macro. */
 #define CONF_ENUM_DEF(valtype, keytype, keyword) CONF_ ## keyword,

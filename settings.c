@@ -655,6 +655,8 @@ void save_open_settings(void *sesskey, Conf *conf)
     write_setting_i(sesskey, "ConnectionSharing", conf_get_int(conf, CONF_ssh_connection_sharing));
     write_setting_i(sesskey, "ConnectionSharingUpstream", conf_get_int(conf, CONF_ssh_connection_sharing_upstream));
     write_setting_i(sesskey, "ConnectionSharingDownstream", conf_get_int(conf, CONF_ssh_connection_sharing_downstream));
+    write_setting_i(sesskey, "DisableCtrlPage", conf_get_int(conf, CONF_no_ctrl_page));
+    write_setting_i(sesskey, "DisableShiftPage", conf_get_int(conf, CONF_no_shift_page));
     wmap(sesskey, "SSHManualHostKeys", conf, CONF_ssh_manual_hostkeys, FALSE);
 }
 
@@ -1006,6 +1008,8 @@ void load_open_settings(void *sesskey, Conf *conf)
     gppi(sesskey, "ConnectionSharing", 0, conf, CONF_ssh_connection_sharing);
     gppi(sesskey, "ConnectionSharingUpstream", 1, conf, CONF_ssh_connection_sharing_upstream);
     gppi(sesskey, "ConnectionSharingDownstream", 1, conf, CONF_ssh_connection_sharing_downstream);
+    gppi(sesskey, "DisableCtrlPage", 0, conf, CONF_no_ctrl_page);
+    gppi(sesskey, "DisableShiftPage", 0, conf, CONF_no_shift_page);
     gppmap(sesskey, "SSHManualHostKeys", conf, CONF_ssh_manual_hostkeys);
 }
 

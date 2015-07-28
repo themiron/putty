@@ -4164,23 +4164,29 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    *p++ = '\033';
 
 	/* Lets see if it's a pattern we know all about ... */
-	if (wParam == VK_PRIOR && shift_state == 1) {
+	if (wParam == VK_PRIOR && shift_state == 1 &&
+	    !conf_get_int(conf, CONF_no_shift_page)) {
 	    SendMessage(hwnd, WM_VSCROLL, SB_PAGEUP, 0);
 	    return 0;
 	}
-	if (wParam == VK_PRIOR && shift_state == 2) {
+	if (wParam == VK_PRIOR && shift_state == 2 &&
+	    !conf_get_int(conf, CONF_no_ctrl_page)) {
 	    SendMessage(hwnd, WM_VSCROLL, SB_LINEUP, 0);
 	    return 0;
 	}
-	if (wParam == VK_NEXT && shift_state == 1) {
+	if (wParam == VK_NEXT && shift_state == 1 &&
+	    !conf_get_int(conf, CONF_no_shift_page)) {
 	    SendMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, 0);
 	    return 0;
 	}
-	if (wParam == VK_NEXT && shift_state == 2) {
+	if (wParam == VK_NEXT && shift_state == 2 &&
+	    !conf_get_int(conf, CONF_no_ctrl_page)) {
 	    SendMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
 	    return 0;
 	}
-	if ((wParam == VK_PRIOR || wParam == VK_NEXT) && shift_state == 3) {
+	if ((wParam == VK_PRIOR || wParam == VK_NEXT) && shift_state == 3 &&
+	    !conf_get_int(conf, CONF_no_shift_page) &&
+	    !conf_get_int(conf, CONF_no_ctrl_page)) {
 	    term_scroll_to_selection(term, (wParam == VK_PRIOR ? 0 : 1));
 	    return 0;
 	}
