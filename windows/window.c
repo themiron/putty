@@ -4359,12 +4359,16 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    }
 	}
 
-	if (wParam == VK_BACK && shift_state == 0) {	/* Backspace */
+	if (wParam == VK_BACK && (shift_state & 2)) {	/* Ctrl Backspace */
+	    if (!left_alt)
+		*p++ = 0x1B;
+	}
+	if (wParam == VK_BACK && !(shift_state & 1)) {	/* Backspace */
 	    *p++ = (conf_get_int(conf, CONF_bksp_is_delete) ? 0x7F : 0x08);
 	    *p++ = 0;
 	    return -2;
 	}
-	if (wParam == VK_BACK && shift_state == 1) {	/* Shift Backspace */
+	if (wParam == VK_BACK && (shift_state & 1)) {	/* Shift Backspace */
 	    /* We do the opposite of what is configured */
 	    *p++ = (conf_get_int(conf, CONF_bksp_is_delete) ? 0x08 : 0x7F);
 	    *p++ = 0;
