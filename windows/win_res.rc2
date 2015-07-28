@@ -13,7 +13,7 @@
 
 IDI_MAINICON ICON "putty.ico"
 
-IDI_CFGICON ICON "puttycfg.ico"
+IDI_CFGICON ICON "putty.ico"
 
 /* Accelerators used: clw */
 IDD_ABOUTBOX DIALOG DISCARDABLE 140, 40, 214, 70
