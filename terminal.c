@@ -6180,6 +6180,7 @@ int format_arrow_key(char *buf, Terminal *term, int xkey, int ctrl)
 	p += sprintf((char *) p, "\x1B%c", xkey);
     else {
 	int app_flg = (term->app_cursor_keys && !term->no_applic_c);
+	int shift_code = "\x0\x2\x5\x6\x3\x4\x7\x8"[ctrl & 7];
 #if 0
 	/*
 	 * RDB: VT100 & VT102 manuals both state the app cursor
@@ -6195,11 +6196,14 @@ int format_arrow_key(char *buf, Terminal *term, int xkey, int ctrl)
 	if (!term->app_keypad_keys)
 	    app_flg = 0;
 #endif
+
 	/* Useful mapping of Ctrl-arrows */
-	if (ctrl)
+	if (ctrl & 2)
 	    app_flg = !app_flg;
 
-	if (app_flg)
+	if (shift_code)
+	    p += sprintf((char *) p, "\x1B[1;%d%c", shift_code, xkey);
+	else if (app_flg)
 	    p += sprintf((char *) p, "\x1BO%c", xkey);
 	else
 	    p += sprintf((char *) p, "\x1B[%c", xkey);

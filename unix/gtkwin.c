@@ -1162,8 +1162,10 @@ gint key_event(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	      case GDK_Begin: case GDK_KP_Begin: xkey = 'G'; break;
 	    }
 	    if (xkey) {
-		end = 1 + format_arrow_key(output+1, inst->term, xkey,
-					   event->state & GDK_CONTROL_MASK);
+		end = format_arrow_key(output, inst->term, xkey,
+					   ((event->state & GDK_SHIFT_MASK) ? 1 : 0) |
+					   ((event->state & GDK_CONTROL_MASK) ? 2: 0) |
+					   ((event->state & GDK_MOD1_MASK) ? 4 : 0));
 		use_ucsoutput = FALSE;
 		goto done;
 	    }

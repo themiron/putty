@@ -3943,7 +3943,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 			unsigned char *output)
 {
     BYTE keystate[256];
-    int scan, left_alt = 0, key_down, shift_state;
+    int scan, left_alt = 0, key_down, shift_state, shift_code;
     int r, i, code;
     unsigned char *p = output;
     static int alt_sum = 0;
@@ -4156,12 +4156,25 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    }
 	}
     }
+    shift_code = "\x0\x2\x5\x6\x3\x4\x7\x8"[shift_state | (left_alt ? 4 : 0)];
 
     /* If a key is pressed and AltGr is not active */
     if (key_down && (keystate[VK_RMENU] & 0x80) == 0 && !compose_state) {
 	/* Okay, prepare for most alts then ... */
-	if (left_alt)
-	    *p++ = '\033';
+	if (left_alt) switch (wParam) {
+	    case VK_UP:
+	    case VK_DOWN:
+	    case VK_RIGHT:
+	    case VK_LEFT:
+	    case VK_CLEAR:
+	    case VK_HOME:
+	    case VK_END:
+	    case VK_PRIOR:
+	    case VK_NEXT:
+		break;
+	    default:
+		*p++ = '\033';
+	}
 
 	/* Lets see if it's a pattern we know all about ... */
 	if (wParam == VK_PRIOR && shift_state == 1 &&
@@ -4476,15 +4489,17 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    code = 34;
 	    break;
 	}
-	if ((shift_state&2) == 0) switch (wParam) {
+	switch (wParam) {
 	  case VK_HOME:
 	    code = 1;
 	    break;
 	  case VK_INSERT:
-	    code = 2;
+	    if ((shift_state & 2) == 0)
+		code = 2;
 	    break;
 	  case VK_DELETE:
-	    code = 3;
+	    if ((shift_state & 2) == 0)
+		code = 3;
 	    break;
 	  case VK_END:
 	    code = 4;
@@ -4567,6 +4582,17 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    p += sprintf((char *) p, code == 1 ? "\x1B[H" : "\x1BOw");
 	    return p - output;
 	}
+
+	if ((code == 1 || code == 4) && shift_code) {
+	    char codes[] = "H..F";
+	    p += sprintf((char *) p, "\x1B[1;%d%c", shift_code, codes[code-1]);
+	    return p - output;
+	}
+	if ((code == 5 || code == 6) && shift_code) {
+	    p += sprintf((char *) p, "\x1B[%d;%d~", code, shift_code);
+	    return p - output;
+	}
+
 	if (code) {
 	    p += sprintf((char *) p, "\x1B[%d~", code);
 	    return p - output;
@@ -4596,7 +4622,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 		break;
 	    }
 	    if (xkey) {
-		p += format_arrow_key(p, term, xkey, shift_state);
+		p += format_arrow_key(p, term, xkey,
+				      shift_state | (left_alt ? 4 : 0));
 		return p - output;
 	    }
 	}
