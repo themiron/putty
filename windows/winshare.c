@@ -16,7 +16,7 @@
 
 #include "winsecur.h"
 
-#ifdef COVERITY
+#if defined(COVERITY) || defined(__MINGW32__)
 /*
  * The hack I use to build for Coverity scanning, using winegcc and
  * Makefile.cyg, didn't provide some defines in wincrypt.h last time I

@@ -77,6 +77,11 @@ struct FontSpec *fontspec_new(const char *name,
 
 #ifndef NO_SECUREZEROMEMORY
 #define PLATFORM_HAS_SMEMCLR /* inhibit cross-platform one in misc.c */
+#ifndef SecureZeroMemory
+#ifdef __MINGW32__
+#define SecureZeroMemory(p,s) RtlFillMemory((p),(s),0)
+#endif
+#endif
 #endif
 
 /*
