@@ -4592,6 +4592,11 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    p += sprintf((char *) p, "\x1B[%d;%d~", code, shift_code);
 	    return p - output;
 	}
+	if ((code >= 11 && code <= 34) && (shift_state & 2)) {
+	    shift_code = "\x0\x2\x5\x6\x3\x4\x7\x8"[shift_state & ~1];
+	    p += sprintf((char *) p, "\x1B[%d;%d~", code, shift_code);
+	    return p - output;
+	}
 
 	if (code) {
 	    p += sprintf((char *) p, "\x1B[%d~", code);
