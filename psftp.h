@@ -48,6 +48,13 @@ int ssh_sftp_loop_iteration(void);
 char *ssh_sftp_get_cmdline(const char *prompt, int backend_required);
 
 /*
+ * Platform-specific function called after the command line has been
+ * processed, so that any per-platform initialisation such as process
+ * ACL setup can be done.
+ */
+void platform_psftp_post_option_setup(void);
+
+/*
  * The main program in psftp.c. Called from main() in the platform-
  * specific code, after doing any platform-specific initialisation.
  */
@@ -176,5 +183,22 @@ int create_directory(const char *name);
  * done will depend on the OS.
  */
 char *dir_file_cat(const char *dir, const char *file);
+
+/*
+ * Return a pointer to the portion of str that comes after the last
+ * path component separator.
+ *
+ * If 'local' is false, path component separators are taken to just be
+ * '/', on the assumption that we're discussing the path syntax on the
+ * server. But if 'local' is true, the separators are whatever the
+ * local OS will treat that way - so that includes '\' and ':' on
+ * Windows.
+ *
+ * This function has the annoying strstr() property of taking a const
+ * char * and returning a char *. You should treat it as if it was a
+ * pair of overloaded functions, one mapping mutable->mutable and the
+ * other const->const :-(
+ */
+char *stripslashes(const char *str, int local);
 
 #endif /* PUTTY_PSFTP_H */

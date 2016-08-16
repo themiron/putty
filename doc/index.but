@@ -59,7 +59,6 @@ from SSH and Telnet
 
 \IM{security hazard}{security risk} security hazard
 
-\IM{SSH-1}{SSH protocol version 1} SSH-1
 \IM{SSH-2}{SSH protocol version 2} SSH-2
 
 \IM{terminal window}{PuTTY window} terminal window
@@ -766,6 +765,7 @@ saved sessions from
 
 \IM{-batch-plink} \c{-batch} Plink command-line option
 \IM{-s-plink} \c{-s} Plink command-line option
+\IM{-shareexists-plink} \c{-shareexists} Plink command-line option
 
 \IM{subsystem} subsystem, SSH
 \IM{subsystem} SSH subsystem
@@ -843,12 +843,15 @@ saved sessions from
 
 \IM{version of PuTTY} version, of PuTTY
 
-\IM{PGP signatures} PGP signatures, of PuTTY binaries
-\IM{PGP signatures} signatures, of PuTTY binaries
+\IM{GPG signatures} PGP signatures, of PuTTY binaries
+\IM{GPG signatures} GPG signatures, of PuTTY binaries
+\IM{GPG signatures} signatures, of PuTTY binaries
 
 \IM{logical host name} logical host name
 \IM{logical host name} host name, logical
-\IM{logical host name} host key, caching policy
+
+\IM{host key cache}{host key management} host key management
+\IM{host key cache}{host key management} cache, of SSH host keys
 
 \IM{web browsers} web browser
 

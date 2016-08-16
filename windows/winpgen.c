@@ -11,6 +11,8 @@
 
 #include "putty.h"
 #include "ssh.h"
+#include "licence.h"
+#include "winsecur.h"
 
 #include <commctrl.h>
 
@@ -20,7 +22,8 @@
 
 #define WM_DONEKEY (WM_APP + 1)
 
-#define DEFAULT_KEYSIZE 2048
+#define DEFAULT_KEY_BITS 2048
+#define DEFAULT_CURVE_INDEX 0
 
 static char *cmdline_keyfile = NULL;
 
@@ -131,7 +134,7 @@ static void progress_update(void *param, int action, int phase, int iprogress)
     }
 }
 
-extern char ver[];
+extern const char ver[];
 
 struct PassphraseProcStruct {
     char **passphrase;
@@ -141,7 +144,7 @@ struct PassphraseProcStruct {
 /*
  * Dialog-box function for the passphrase box.
  */
-static int CALLBACK PassphraseProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK PassphraseProc(HWND hwnd, UINT msg,
 				   WPARAM wParam, LPARAM lParam)
 {
     static char **passphrase = NULL;
@@ -233,7 +236,7 @@ static int prompt_keyfile(HWND hwnd, char *dlgtitle,
 /*
  * Dialog-box function for the Licence box.
  */
-static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK LicenceProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
@@ -253,6 +256,7 @@ static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
 			   rd.right - rd.left, rd.bottom - rd.top, TRUE);
 	}
 
+        SetDlgItemText(hwnd, 1000, LICENCE_TEXT("\r\n\r\n"));
 	return 1;
       case WM_COMMAND:
 	switch (LOWORD(wParam)) {
@@ -272,7 +276,7 @@ static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
 /*
  * Dialog-box function for the About box.
  */
-static int CALLBACK AboutProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK AboutProc(HWND hwnd, UINT msg,
 			      WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
@@ -292,7 +296,14 @@ static int CALLBACK AboutProc(HWND hwnd, UINT msg,
 			   rd.right - rd.left, rd.bottom - rd.top, TRUE);
 	}
 
-	SetDlgItemText(hwnd, 100, ver);
+        {
+            char *text = dupprintf
+                ("PuTTYgen\r\n\r\n%s\r\n\r\n%s",
+                 ver,
+                 "\251 " SHORT_COPYRIGHT_DETAILS ". All rights reserved.");
+            SetDlgItemText(hwnd, 1000, text);
+            sfree(text);
+        }
 	return 1;
       case WM_COMMAND:
 	switch (LOWORD(wParam)) {
@@ -323,7 +334,8 @@ typedef enum {RSA, DSA, ECDSA, ED25519} keytype;
 struct rsa_key_thread_params {
     HWND progressbar;		       /* notify this with progress */
     HWND dialog;		       /* notify this on completion */
-    int keysize;		       /* bits in key */
+    int key_bits;		       /* bits in key modulus (RSA, DSA) */
+    int curve_bits;                    /* bits in elliptic curve (ECDSA) */
     keytype keytype;
     union {
         struct RSAKey *key;
@@ -331,7 +343,7 @@ struct rsa_key_thread_params {
         struct ec_key *eckey;
     };
 };
-static DWORD WINAPI generate_rsa_key_thread(void *param)
+static DWORD WINAPI generate_key_thread(void *param)
 {
     struct rsa_key_thread_params *params =
 	(struct rsa_key_thread_params *) param;
@@ -341,13 +353,13 @@ static DWORD WINAPI generate_rsa_key_thread(void *param)
     progress_update(&prog, PROGFN_INITIALISE, 0, 0);
 
     if (params->keytype == DSA)
-	dsa_generate(params->dsskey, params->keysize, progress_update, &prog);
+	dsa_generate(params->dsskey, params->key_bits, progress_update, &prog);
     else if (params->keytype == ECDSA)
-        ec_generate(params->eckey, params->keysize, progress_update, &prog);
+        ec_generate(params->eckey, params->curve_bits, progress_update, &prog);
     else if (params->keytype == ED25519)
-        ec_edgenerate(params->eckey, params->keysize, progress_update, &prog);
+        ec_edgenerate(params->eckey, 256, progress_update, &prog);
     else
-	rsa_generate(params->key, params->keysize, progress_update, &prog);
+	rsa_generate(params->key, params->key_bits, progress_update, &prog);
 
     PostMessage(params->dialog, WM_DONEKEY, 0, 0);
 
@@ -360,7 +372,7 @@ struct MainDlgState {
     int generation_thread_exists;
     int key_exists;
     int entropy_got, entropy_required, entropy_size;
-    int keysize;
+    int key_bits, curve_bits;
     int ssh2;
     keytype keytype;
     char **commentptr;		       /* points to key.comment or ssh2key.comment */
@@ -441,6 +453,8 @@ enum {
     IDC_TYPESTATIC, IDC_KEYSSH1, IDC_KEYSSH2RSA, IDC_KEYSSH2DSA,
     IDC_KEYSSH2ECDSA, IDC_KEYSSH2ED25519,
     IDC_BITSSTATIC, IDC_BITS,
+    IDC_CURVESTATIC, IDC_CURVE,
+    IDC_NOTHINGSTATIC,
     IDC_ABOUT,
     IDC_GIVEHELP,
     IDC_IMPORT,
@@ -573,6 +587,47 @@ void ui_set_state(HWND hwnd, struct MainDlgState *state, int status)
 #undef do_export_menuitem
 	break;
     }
+}
+
+/*
+ * Helper functions to set the key type, taking care of keeping the
+ * menu and radio button selections in sync and also showing/hiding
+ * the appropriate size/curve control for the current key type.
+ */
+void ui_update_key_type_ctrls(HWND hwnd)
+{
+    enum { BITS, CURVE, NOTHING } which;
+    static const int bits_ids[] = {
+        IDC_BITSSTATIC, IDC_BITS, 0
+    };
+    static const int curve_ids[] = {
+        IDC_CURVESTATIC, IDC_CURVE, 0
+    };
+    static const int nothing_ids[] = {
+        IDC_NOTHINGSTATIC, 0
+    };
+
+    if (IsDlgButtonChecked(hwnd, IDC_KEYSSH1) ||
+        IsDlgButtonChecked(hwnd, IDC_KEYSSH2RSA) ||
+        IsDlgButtonChecked(hwnd, IDC_KEYSSH2DSA)) {
+        which = BITS;
+    } else if (IsDlgButtonChecked(hwnd, IDC_KEYSSH2ECDSA)) {
+        which = CURVE;
+    } else {
+        /* ED25519 implicitly only supports one curve */
+        which = NOTHING;
+    }
+
+    hidemany(hwnd, bits_ids, which != BITS);
+    hidemany(hwnd, curve_ids, which != CURVE);
+    hidemany(hwnd, nothing_ids, which != NOTHING);
+}
+void ui_set_key_type(HWND hwnd, struct MainDlgState *state, int button)
+{
+    CheckRadioButton(hwnd, IDC_KEYSSH1, IDC_KEYSSH2ED25519, button);
+    CheckMenuRadioItem(state->keymenu, IDC_KEYSSH1, IDC_KEYSSH2ED25519,
+                       button, MF_BYCOMMAND);
+    ui_update_key_type_ctrls(hwnd);
 }
 
 void load_key_file(HWND hwnd, struct MainDlgState *state,
@@ -749,7 +804,7 @@ void load_key_file(HWND hwnd, struct MainDlgState *state,
 /*
  * Dialog-box function for the main PuTTYgen dialog box.
  */
-static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     static const char generating_msg[] =
@@ -790,7 +845,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 	    AppendMenu(menu1, MF_ENABLED, IDC_SAVE, "&Save private key");
 	    AppendMenu(menu1, MF_SEPARATOR, 0, 0);
 	    AppendMenu(menu1, MF_ENABLED, IDC_QUIT, "E&xit");
-	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT) menu1, "&File");
+	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT_PTR) menu1, "&File");
 	    state->filemenu = menu1;
 
 	    menu1 = CreateMenu();
@@ -801,7 +856,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 	    AppendMenu(menu1, MF_ENABLED, IDC_KEYSSH2DSA, "SSH-2 &DSA key");
             AppendMenu(menu1, MF_ENABLED, IDC_KEYSSH2ECDSA, "SSH-2 &ECDSA key");
             AppendMenu(menu1, MF_ENABLED, IDC_KEYSSH2ED25519, "SSH-2 ED&25519 key");
-	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT) menu1, "&Key");
+	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT_PTR) menu1, "&Key");
 	    state->keymenu = menu1;
 
 	    menu1 = CreateMenu();
@@ -813,7 +868,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 		       "Export &OpenSSH key (force new file format)");
 	    AppendMenu(menu1, MF_ENABLED, IDC_EXPORT_SSHCOM,
 		       "Export &ssh.com key");
-	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT) menu1,
+	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT_PTR) menu1,
 		       "Con&versions");
 	    state->cvtmenu = menu1;
 
@@ -821,7 +876,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 	    AppendMenu(menu1, MF_ENABLED, IDC_ABOUT, "&About");
 	    if (has_help())
 		AppendMenu(menu1, MF_ENABLED, IDC_GIVEHELP, "&Help");
-	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT) menu1, "&Help");
+	    AppendMenu(menu, MF_POPUP | MF_ENABLED, (UINT_PTR) menu1, "&Help");
 
 	    SetMenu(hwnd, menu);
 	}
@@ -843,8 +898,9 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 
 	{
 	    struct ctlpos cp, cp2;
+            int ymax;
 
-	    /* Accelerators used: acglops1rbde */
+	    /* Accelerators used: acglops1rbvde */
 
 	    ctlposinit(&cp, hwnd, 4, 4, 4);
 	    beginbox(&cp, "Key", IDC_BOX_KEY);
@@ -885,14 +941,38 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
                       "ED&25519", IDC_KEYSSH2ED25519,
 		      "SSH-&1 (RSA)", IDC_KEYSSH1,
                       NULL);
-	    staticedit(&cp, "Number of &bits in a generated key:",
+            cp2 = cp;
+	    staticedit(&cp2, "Number of &bits in a generated key:",
 		       IDC_BITSSTATIC, IDC_BITS, 20);
+            ymax = cp2.ypos;
+            cp2 = cp;
+	    staticddl(&cp2, "Cur&ve to use for generating this key:",
+                      IDC_CURVESTATIC, IDC_CURVE, 20);
+            SendDlgItemMessage(hwnd, IDC_CURVE, CB_RESETCONTENT, 0, 0);
+            {
+                int i, bits;
+                const struct ec_curve *curve;
+                const struct ssh_signkey *alg;
+
+                for (i = 0; i < n_ec_nist_curve_lengths; i++) {
+                    bits = ec_nist_curve_lengths[i];
+                    ec_nist_alg_and_curve_by_bits(bits, &curve, &alg);
+                    SendDlgItemMessage(hwnd, IDC_CURVE, CB_ADDSTRING, 0,
+                                       (LPARAM)curve->textname);
+                }
+            }
+            ymax = ymax > cp2.ypos ? ymax : cp2.ypos;
+            cp2 = cp;
+	    statictext(&cp2, "(nothing to configure for this key type)",
+		       1, IDC_NOTHINGSTATIC);
+            ymax = ymax > cp2.ypos ? ymax : cp2.ypos;
+            cp.ypos = ymax;
 	    endbox(&cp);
 	}
-        CheckRadioButton(hwnd, IDC_KEYSSH1, IDC_KEYSSH2ECDSA, IDC_KEYSSH2RSA);
-        CheckMenuRadioItem(state->keymenu, IDC_KEYSSH1, IDC_KEYSSH2ECDSA,
-			   IDC_KEYSSH2RSA, MF_BYCOMMAND);
-	SetDlgItemInt(hwnd, IDC_BITS, DEFAULT_KEYSIZE, FALSE);
+        ui_set_key_type(hwnd, state, IDC_KEYSSH2RSA);
+	SetDlgItemInt(hwnd, IDC_BITS, DEFAULT_KEY_BITS, FALSE);
+	SendDlgItemMessage(hwnd, IDC_CURVE, CB_SETCURSEL,
+                           DEFAULT_CURVE_INDEX, 0);
 
 	/*
 	 * Initially, hide the progress bar and the key display,
@@ -940,12 +1020,13 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 		params = snew(struct rsa_key_thread_params);
 		params->progressbar = GetDlgItem(hwnd, IDC_PROGRESS);
 		params->dialog = hwnd;
-		params->keysize = state->keysize;
+		params->key_bits = state->key_bits;
+		params->curve_bits = state->curve_bits;
                 params->keytype = state->keytype;
 		params->key = &state->key;
 		params->dsskey = &state->dsskey;
 
-		if (!CreateThread(NULL, 0, generate_rsa_key_thread,
+		if (!CreateThread(NULL, 0, generate_key_thread,
 				  params, 0, &threadid)) {
 		    MessageBox(hwnd, "Out of thread resources",
 			       "Key generation error",
@@ -967,13 +1048,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 	    {
 		state = (struct MainDlgState *)
 		    GetWindowLongPtr(hwnd, GWLP_USERDATA);
-		if (!IsDlgButtonChecked(hwnd, LOWORD(wParam)))
-		    CheckRadioButton(hwnd,
-                                     IDC_KEYSSH1, IDC_KEYSSH2ED25519,
-				     LOWORD(wParam));
-		CheckMenuRadioItem(state->keymenu,
-                                   IDC_KEYSSH1, IDC_KEYSSH2ED25519,
-				   LOWORD(wParam), MF_BYCOMMAND);
+                ui_set_key_type(hwnd, state, LOWORD(wParam));
 	    }
 	    break;
 	  case IDC_QUIT:
@@ -1020,9 +1095,16 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 		(struct MainDlgState *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
 	    if (!state->generation_thread_exists) {
 		BOOL ok;
-		state->keysize = GetDlgItemInt(hwnd, IDC_BITS, &ok, FALSE);
+		state->key_bits = GetDlgItemInt(hwnd, IDC_BITS, &ok, FALSE);
 		if (!ok)
-		    state->keysize = DEFAULT_KEYSIZE;
+		    state->key_bits = DEFAULT_KEY_BITS;
+                {
+                    int curveindex = SendDlgItemMessage(hwnd, IDC_CURVE,
+                                                        CB_GETCURSEL, 0, 0);
+                    assert(curveindex >= 0);
+                    assert(curveindex < n_ec_nist_curve_lengths);
+                    state->curve_bits = ec_nist_curve_lengths[curveindex];
+                }
 		/* If we ever introduce a new key type, check it here! */
 		state->ssh2 = !IsDlgButtonChecked(hwnd, IDC_KEYSSH1);
                 state->keytype = RSA;
@@ -1033,44 +1115,32 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
                 } else if (IsDlgButtonChecked(hwnd, IDC_KEYSSH2ED25519)) {
                     state->keytype = ED25519;
                 }
-		if (state->keysize < 256) {
-		    int ret = MessageBox(hwnd,
-					 "PuTTYgen will not generate a key"
-					 " smaller than 256 bits.\n"
-					 "Key length reset to 256. Continue?",
-					 "PuTTYgen Warning",
+
+		if ((state->keytype == RSA || state->keytype == DSA) &&
+                    state->key_bits < 256) {
+                    char *message = dupprintf
+                        ("PuTTYgen will not generate a key smaller than 256"
+                         " bits.\nKey length reset to default %d. Continue?",
+                         DEFAULT_KEY_BITS);
+		    int ret = MessageBox(hwnd, message, "PuTTYgen Warning",
 					 MB_ICONWARNING | MB_OKCANCEL);
+                    sfree(message);
 		    if (ret != IDOK)
 			break;
-		    state->keysize = 256;
-		    SetDlgItemInt(hwnd, IDC_BITS, 256, FALSE);
-		}
-                if (state->keytype == ECDSA && !(state->keysize == 256 ||
-                                                 state->keysize == 384 ||
-                                                 state->keysize == 521)) {
-                    int ret = MessageBox(hwnd,
-                                         "Only 256, 384 and 521 bit elliptic"
-                                         " curves are supported.\n"
-                                         "Key length reset to 256. Continue?",
-                                         "PuTTYgen Warning",
-                                         MB_ICONWARNING | MB_OKCANCEL);
-                    if (ret != IDOK)
-                        break;
-                    state->keysize = 256;
-                    SetDlgItemInt(hwnd, IDC_BITS, 256, FALSE);
+		    state->key_bits = DEFAULT_KEY_BITS;
+		    SetDlgItemInt(hwnd, IDC_BITS, DEFAULT_KEY_BITS, FALSE);
+		} else if ((state->keytype == RSA || state->keytype == DSA) &&
+                           state->key_bits < DEFAULT_KEY_BITS) {
+                    char *message = dupprintf
+                        ("Keys shorter than %d bits are not recommended. "
+                         "Really generate this key?", DEFAULT_KEY_BITS);
+		    int ret = MessageBox(hwnd, message, "PuTTYgen Warning",
+					 MB_ICONWARNING | MB_OKCANCEL);
+                    sfree(message);
+		    if (ret != IDOK)
+			break;
                 }
-                if (state->keytype == ED25519 && state->keysize != 256) {
-                    int ret = MessageBox(hwnd,
-                                         "Only 256 bit Edwards elliptic"
-                                         " curves are supported.\n"
-                                         "Key length reset to 256. Continue?",
-                                         "PuTTYgen Warning",
-                                         MB_ICONWARNING | MB_OKCANCEL);
-                    if (ret != IDOK)
-                        break;
-                    state->keysize = 256;
-                    SetDlgItemInt(hwnd, IDC_BITS, 256, FALSE);
-                }
+
 		ui_set_state(hwnd, state, 1);
 		SetDlgItemText(hwnd, IDC_GENERATING, entropy_msg);
 		state->key_exists = FALSE;
@@ -1089,7 +1159,13 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 		 * so with 2 bits per mouse movement we expect 2
 		 * bits every 2 words.
 		 */
-		state->entropy_required = (state->keysize / 2) * 2;
+		if (state->keytype == RSA || state->keytype == DSA)
+                    state->entropy_required = (state->key_bits / 2) * 2;
+		else if (state->keytype == ECDSA)
+                    state->entropy_required = (state->curve_bits / 2) * 2;
+                else
+                    state->entropy_required = 256;
+
 		state->entropy_got = 0;
 		state->entropy_size = (state->entropy_required *
 				       sizeof(unsigned));
@@ -1443,6 +1519,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     char **argv;
     int ret;
 
+    dll_hijacking_protection();
+
     InitCommonControls();
     hinst = inst;
     hwnd = NULL;
@@ -1466,6 +1544,23 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 	    cmdline_keyfile = argv[0];
 	}
     }
+
+#if !defined UNPROTECT && !defined NO_SECURITY
+    /*
+     * Protect our process.
+     */
+    {
+        char *error = NULL;
+        if (!setprocessacl(error)) {
+            char *message = dupprintf("Could not restrict process ACL: %s",
+                                      error);
+            MessageBox(NULL, message, "PuTTYgen Warning",
+                       MB_ICONWARNING | MB_OK);
+            sfree(message);
+            sfree(error);
+        }
+    }
+#endif
 
     random_ref();
     ret = DialogBox(hinst, MAKEINTRESOURCE(201), NULL, MainDlgProc) != IDOK;

@@ -286,7 +286,8 @@ struct X11Display *x11_setup_display(const char *display, Conf *conf)
 
 	disp->port = 6000 + disp->displaynum;
 	disp->addr = name_lookup(disp->hostname, disp->port,
-				 &disp->realhost, conf, ADDRTYPE_UNSPEC);
+				 &disp->realhost, conf, ADDRTYPE_UNSPEC,
+                                 NULL, NULL);
     
 	if ((err = sk_addr_error(disp->addr)) != NULL) {
 	    sk_addr_free(disp->addr);
@@ -420,7 +421,8 @@ static const char *x11_verify(unsigned long peer_ip, int peer_port,
 	    if (data[i] != 0)	       /* zero padding wrong */
 		return "XDM-AUTHORIZATION-1 data failed check";
 	tim = time(NULL);
-	if (abs(t - tim) > XDM_MAXSKEW)
+	if (((unsigned long)t - (unsigned long)tim
+             + XDM_MAXSKEW) > 2*XDM_MAXSKEW)
 	    return "XDM-AUTHORIZATION-1 time stamp was too far out";
 	seen = snew(struct XDMSeen);
 	seen->time = t;

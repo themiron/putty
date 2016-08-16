@@ -7,10 +7,15 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/time.h>
+#ifndef HAVE_NO_SYS_SELECT_H
+#include <sys/select.h>
+#endif
 
 #include "putty.h"
 #include "storage.h"
@@ -72,6 +77,38 @@ void notify_remote_exit(void *frontend)
 
 void timer_change_notify(unsigned long next)
 {
+}
+
+/*
+ * Wrapper around Unix read(2), suitable for use on a file descriptor
+ * that's been set into nonblocking mode. Handles EAGAIN/EWOULDBLOCK
+ * by means of doing a one-fd select and then trying again; all other
+ * errors (including errors from select) are returned to the caller.
+ */
+static int block_and_read(int fd, void *buf, size_t len)
+{
+    int ret;
+
+    while ((ret = read(fd, buf, len)) < 0 && (
+#ifdef EAGAIN
+               (errno == EAGAIN) ||
+#endif
+#ifdef EWOULDBLOCK
+               (errno == EWOULDBLOCK) ||
+#endif
+               0)) {
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        ret = select(fd+1, &rfds, NULL, NULL, NULL);
+        assert(ret != 0);
+        if (ret < 0)
+            return ret;
+        assert(FD_ISSET(fd, &rfds));
+    }
+
+    return ret;
 }
 
 int verify_ssh_host_key(void *frontend, char *host, int port,
@@ -163,7 +200,7 @@ int verify_ssh_host_key(void *frontend, char *host, int port,
 	newmode.c_lflag |= ECHO | ISIG | ICANON;
 	tcsetattr(0, TCSANOW, &newmode);
 	line[0] = '\0';
-	if (read(0, line, sizeof(line) - 1) <= 0)
+	if (block_and_read(0, line, sizeof(line) - 1) <= 0)
 	    /* handled below */;
 	tcsetattr(0, TCSANOW, &oldmode);
     }
@@ -216,7 +253,60 @@ int askalg(void *frontend, const char *algtype, const char *algname,
 	newmode.c_lflag |= ECHO | ISIG | ICANON;
 	tcsetattr(0, TCSANOW, &newmode);
 	line[0] = '\0';
-	if (read(0, line, sizeof(line) - 1) <= 0)
+	if (block_and_read(0, line, sizeof(line) - 1) <= 0)
+	    /* handled below */;
+	tcsetattr(0, TCSANOW, &oldmode);
+    }
+
+    if (line[0] == 'y' || line[0] == 'Y') {
+	postmsg(&cf);
+	return 1;
+    } else {
+	fprintf(stderr, abandoned);
+	postmsg(&cf);
+	return 0;
+    }
+}
+
+int askhk(void *frontend, const char *algname, const char *betteralgs,
+          void (*callback)(void *ctx, int result), void *ctx)
+{
+    static const char msg[] =
+	"The first host key type we have stored for this server\n"
+	"is %s, which is below the configured warning threshold.\n"
+	"The server also provides the following types of host key\n"
+        "above the threshold, which we do not have stored:\n"
+        "%s\n"
+	"Continue with connection? (y/n) ";
+    static const char msg_batch[] =
+	"The first host key type we have stored for this server\n"
+	"is %s, which is below the configured warning threshold.\n"
+	"The server also provides the following types of host key\n"
+        "above the threshold, which we do not have stored:\n"
+        "%s\n"
+	"Connection abandoned.\n";
+    static const char abandoned[] = "Connection abandoned.\n";
+
+    char line[32];
+    struct termios cf;
+
+    premsg(&cf);
+    if (console_batch_mode) {
+	fprintf(stderr, msg_batch, algname, betteralgs);
+	return 0;
+    }
+
+    fprintf(stderr, msg, algname, betteralgs);
+    fflush(stderr);
+
+    {
+	struct termios oldmode, newmode;
+	tcgetattr(0, &oldmode);
+	newmode = oldmode;
+	newmode.c_lflag |= ECHO | ISIG | ICANON;
+	tcsetattr(0, TCSANOW, &newmode);
+	line[0] = '\0';
+	if (block_and_read(0, line, sizeof(line) - 1) <= 0)
 	    /* handled below */;
 	tcsetattr(0, TCSANOW, &oldmode);
     }
@@ -270,7 +360,7 @@ int askappend(void *frontend, Filename *filename,
 	newmode.c_lflag |= ECHO | ISIG | ICANON;
 	tcsetattr(0, TCSANOW, &newmode);
 	line[0] = '\0';
-	if (read(0, line, sizeof(line) - 1) <= 0)
+	if (block_and_read(0, line, sizeof(line) - 1) <= 0)
 	    /* handled below */;
 	tcsetattr(0, TCSANOW, &oldmode);
     }

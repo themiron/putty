@@ -26,8 +26,8 @@
  * In PSFTP our selects are synchronous, so these functions are
  * empty stubs.
  */
-int uxsel_input_add(int fd, int rwx) { return 0; }
-void uxsel_input_remove(int id) { }
+uxsel_id *uxsel_input_add(int fd, int rwx) { return NULL; }
+void uxsel_input_remove(uxsel_id *id) { }
 
 char *x_get_default(const char *key)
 {
@@ -413,6 +413,20 @@ void finish_wildcard_matching(WildcardMatcher *dir) {
     sfree(dir);
 }
 
+char *stripslashes(const char *str, int local)
+{
+    char *p;
+
+    /*
+     * On Unix, we do the same thing regardless of the 'local'
+     * parameter.
+     */
+    p = strrchr(str, '/');
+    if (p) str = p+1;
+
+    return (char *)str;
+}
+
 int vet_filename(const char *name)
 {
     if (strchr(name, '/'))
@@ -603,6 +617,8 @@ char *ssh_sftp_get_cmdline(const char *prompt, int no_fds_ok)
 }
 
 void frontend_net_error_pending(void) {}
+
+void platform_psftp_post_option_setup(void) {}
 
 /*
  * Main program: do platform-specific initialisation and then call

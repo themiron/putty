@@ -412,7 +412,7 @@ char *dupvprintf(const char *fmt, va_list ap)
     size = 512;
 
     while (1) {
-#ifdef _WINDOWS
+#if defined _WINDOWS && _MSC_VER < 1900 /* 1900 == VS2015 has real snprintf */
 #define vsnprintf _vsnprintf
 #endif
 #ifdef va_copy
@@ -460,7 +460,7 @@ char *fgetline(FILE *fp)
     int size = 512, len = 0;
     while (fgets(ret + len, size - len, fp)) {
 	len += strlen(ret + len);
-	if (ret[len-1] == '\n')
+	if (len > 0 && ret[len-1] == '\n')
 	    break;		       /* got a newline, we're done */
 	size = len + 512;
 	ret = sresize(ret, size, char);
@@ -755,7 +755,7 @@ void *safemalloc(size_t n, size_t size)
 #else
 	strcpy(str, "Out of memory!");
 #endif
-	modalfatalbox(str);
+	modalfatalbox("%s", str);
     }
 #ifdef MALLOC_LOG
     if (fp)
@@ -797,7 +797,7 @@ void *saferealloc(void *ptr, size_t n, size_t size)
 #else
 	strcpy(str, "Out of memory!");
 #endif
-	modalfatalbox(str);
+	modalfatalbox("%s", str);
     }
 #ifdef MALLOC_LOG
     if (fp)
@@ -853,7 +853,7 @@ void debug_memdump(const void *buf, int len, int L)
     if (L) {
 	int delta;
 	debug_printf("\t%d (0x%x) bytes:\n", len, len);
-	delta = 15 & (unsigned long int) p;
+	delta = 15 & (uintptr_t)p;
 	p -= delta;
 	len += delta;
     }
@@ -1064,7 +1064,7 @@ int match_ssh_id(int stringlen, const void *string, const char *id)
 void *get_ssh_string(int *datalen, const void **data, int *stringlen)
 {
     void *ret;
-    int len;
+    unsigned int len;
 
     if (*datalen < 4)
         return NULL;
@@ -1086,4 +1086,15 @@ int get_ssh_uint32(int *datalen, const void **data, unsigned *ret)
     *datalen -= 4;
     *data = (const char *)*data + 4;
     return TRUE;
+}
+
+int strstartswith(const char *s, const char *t)
+{
+    return !memcmp(s, t, strlen(t));
+}
+
+int strendswith(const char *s, const char *t)
+{
+    size_t slen = strlen(s), tlen = strlen(t);
+    return slen >= tlen && !strcmp(s + (slen - tlen), t);
 }

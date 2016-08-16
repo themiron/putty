@@ -95,6 +95,13 @@ Filename *filename_deserialise(void *vdata, int maxsize, int *used)
     return filename_from_str(data);
 }
 
+char filename_char_sanitise(char c)
+{
+    if (c == '/')
+        return '.';
+    return c;
+}
+
 #ifdef DEBUG
 static FILE *debug_fp = NULL;
 
@@ -163,9 +170,11 @@ void pgp_fingerprints(void)
 	  "one. See the manual for more information.\n"
 	  "(Note: these fingerprints have nothing to do with SSH!)\n"
 	  "\n"
-	  "PuTTY Master Key (RSA), 1024-bit:\n"
+	  "PuTTY Master Key as of 2015 (RSA, 4096-bit):\n"
+	  "  " PGP_MASTER_KEY_FP "\n\n"
+	  "Original PuTTY Master Key (RSA, 1024-bit):\n"
 	  "  " PGP_RSA_MASTER_KEY_FP "\n"
-	  "PuTTY Master Key (DSA), 1024-bit:\n"
+	  "Original PuTTY Master Key (DSA, 1024-bit):\n"
 	  "  " PGP_DSA_MASTER_KEY_FP "\n", stdout);
 }
 
@@ -312,4 +321,31 @@ char *make_dir_and_check_ours(const char *dirname)
                          " (expected 700)", dirname, st.st_mode & 0777);
 
     return NULL;
+}
+
+char *make_dir_path(const char *path, mode_t mode)
+{
+    int pos = 0;
+    char *prefix;
+
+    while (1) {
+        pos += strcspn(path + pos, "/");
+
+        if (pos > 0) {
+            prefix = dupprintf("%.*s", pos, path);
+
+            if (mkdir(prefix, mode) < 0 && errno != EEXIST) {
+                char *ret = dupprintf("%s: mkdir: %s",
+                                      prefix, strerror(errno));
+                sfree(prefix);
+                return ret;
+            }
+
+            sfree(prefix);
+        }
+
+        if (!path[pos])
+            return NULL;
+        pos += strspn(path + pos, "/");
+    }
 }

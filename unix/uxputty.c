@@ -7,16 +7,20 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <gtk/gtk.h>
 #include <gdk/gdk.h>
 
 #include "putty.h"
 #include "storage.h"
+
+#include "gtkcompat.h"
 
 /*
  * Stubs to avoid uxpty.c needing to be linked in.
  */
 const int use_pty_argv = FALSE;
 char **pty_argv;		       /* never used */
+char *pty_osx_envrestore_prefix;
 
 /*
  * Clean up and exit.
@@ -49,6 +53,7 @@ int cfgbox(Conf *conf)
 static int got_host = 0;
 
 const int use_event_log = 1, new_session = 1, saved_sessions = 1;
+const int dup_check_launchable = 1;
 
 int process_nonoption_arg(const char *arg, Conf *conf, int *allow_launch)
 {
@@ -129,11 +134,8 @@ char *platform_get_x_display(void) {
 const int share_can_be_downstream = TRUE;
 const int share_can_be_upstream = TRUE;
 
-int main(int argc, char **argv)
+void setup(int single)
 {
-    extern int pt_main(int argc, char **argv);
-    int ret;
-
     sk_init();
     flags = FLAG_VERBOSE | FLAG_INTERACTIVE;
     default_protocol = be_default_protocol;
@@ -144,7 +146,4 @@ int main(int argc, char **argv)
 	if (b)
 	    default_port = b->default_port;
     }
-    ret = pt_main(argc, argv);
-    cleanup_exit(ret);
-    return ret;             /* not reached, but placates optimisers */
 }

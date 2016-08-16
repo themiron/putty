@@ -24,6 +24,7 @@ void sshfwd_x11_is_local(struct ssh_channel *c);
 
 extern Socket ssh_connection_sharing_init(const char *host, int port,
                                           Conf *conf, Ssh ssh, void **state);
+int ssh_share_test_for_upstream(const char *host, int port, Conf *conf);
 void share_got_pkt_from_server(void *ctx, int type,
                                unsigned char *pkt, int pktlen);
 void share_activate(void *state, const char *server_verstring);
@@ -154,6 +155,7 @@ struct ec_curve {
 const struct ssh_signkey *ec_alg_by_oid(int len, const void *oid,
                                         const struct ec_curve **curve);
 const unsigned char *ec_alg_oid(const struct ssh_signkey *alg, int *oidlen);
+extern const int ec_nist_curve_lengths[], n_ec_nist_curve_lengths;
 const int ec_nist_alg_and_curve_by_bits(int bits,
                                         const struct ec_curve **curve,
                                         const struct ssh_signkey **alg);
@@ -319,7 +321,19 @@ struct ssh2_cipher {
     void (*decrypt_length) (void *, unsigned char *blk, int len, unsigned long seq);
     const char *name;
     int blksize;
-    int keylen;
+    /* real_keybits is the number of bits of entropy genuinely used by
+     * the cipher scheme; it's used for deciding how big a
+     * Diffie-Hellman group is needed to exchange a key for the
+     * cipher. */
+    int real_keybits;
+    /* padded_keybytes is the number of bytes of key data expected as
+     * input to the setkey function; it's used for deciding how much
+     * data needs to be generated from the post-kex generation of key
+     * material. In a sensible cipher which uses all its key bytes for
+     * real work, this will just be real_keybits/8, but in DES-type
+     * ciphers which ignore one bit in each byte, it'll be slightly
+     * different. */
+    int padded_keybytes;
     unsigned int flags;
 #define SSH_CIPHER_IS_CBC	1
 #define SSH_CIPHER_SEPARATE_LENGTH      2
@@ -347,14 +361,16 @@ struct ssh_mac {
     void (*genresult) (void *, unsigned char *);
     int (*verresult) (void *, unsigned char const *);
     const char *name, *etm_name;
-    int len;
+    int len, keylen;
     const char *text_name;
 };
 
 struct ssh_hash {
     void *(*init)(void); /* also allocates context */
+    void *(*copy)(const void *);
     void (*bytes)(void *, const void *, int);
     void (*final)(void *, unsigned char *); /* also frees context */
+    void (*free)(void *);
     int hlen; /* output length in bytes */
     const char *text_name;
 };   
@@ -473,7 +489,7 @@ void aes_ssh2_decrypt_blk(void *handle, unsigned char *blk, int len);
 /*
  * PuTTY version number formatted as an SSH version string. 
  */
-extern char sshver[];
+extern const char sshver[];
 
 /*
  * Gross hack: pscp will try to start SFTP but fall back to scp1 if

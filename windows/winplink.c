@@ -11,6 +11,7 @@
 #include "putty.h"
 #include "storage.h"
 #include "tree234.h"
+#include "winsecur.h"
 
 #define WM_AGENT_CALLBACK (WM_APP + 4)
 
@@ -212,6 +213,11 @@ static void usage(void)
     printf("  -N        don't start a shell/command (SSH-2 only)\n");
     printf("  -nc host:port\n");
     printf("            open tunnel in place of session (SSH-2 only)\n");
+    printf("  -sshlog file\n");
+    printf("  -sshrawlog file\n");
+    printf("            log protocol details to a file\n");
+    printf("  -shareexists\n");
+    printf("            test whether a connection-sharing upstream exists\n");
     exit(1);
 }
 
@@ -303,7 +309,10 @@ int main(int argc, char **argv)
     int errors;
     int got_host = FALSE;
     int use_subsystem = 0;
+    int just_test_share_exists = FALSE;
     unsigned long now, next, then;
+
+    dll_hijacking_protection();
 
     sklist = NULL;
     skcount = sksize = 0;
@@ -364,6 +373,8 @@ int main(int argc, char **argv)
             } else if (!strcmp(p, "-pgpfp")) {
                 pgp_fingerprints();
                 exit(1);
+	    } else if (!strcmp(p, "-shareexists")) {
+                just_test_share_exists = TRUE;
 	    } else {
 		fprintf(stderr, "plink: unknown option \"%s\"\n", p);
 		errors = 1;
@@ -489,6 +500,22 @@ int main(int argc, char **argv)
 	}
     }
 
+#if !defined UNPROTECT && !defined NO_SECURITY
+    /*
+     * Protect our process.
+     */
+    {
+        char *error = NULL;
+        if (!setprocessacl(error)) {
+            char *message = dupprintf("Could not restrict process ACL: %s",
+                                      error);
+            logevent(NULL, message);
+            sfree(message);
+            sfree(error);
+        }
+    }
+#endif
+
     if (errors)
 	return 1;
 
@@ -593,8 +620,32 @@ int main(int argc, char **argv)
 	return 1;
     }
 
+    /*
+     * Plink doesn't provide any way to add forwardings after the
+     * connection is set up, so if there are none now, we can safely set
+     * the "simple" flag.
+     */
+    if (conf_get_int(conf, CONF_protocol) == PROT_SSH &&
+	!conf_get_int(conf, CONF_x11_forward) &&
+	!conf_get_int(conf, CONF_agentfwd) &&
+	!conf_get_str_nthstrkey(conf, CONF_portfwd, 0))
+	conf_set_int(conf, CONF_ssh_simple, TRUE);
+
     logctx = log_init(NULL, conf);
     console_provide_logctx(logctx);
+
+    if (just_test_share_exists) {
+        if (!back->test_for_upstream) {
+            fprintf(stderr, "Connection sharing not supported for connection "
+                    "type '%s'\n", back->name);
+            return 1;
+        }
+        if (back->test_for_upstream(conf_get_str(conf, CONF_host),
+                                    conf_get_int(conf, CONF_port), conf))
+            return 0;
+        else
+            return 1;
+    }
 
     /*
      * Start up the connection.

@@ -170,35 +170,6 @@ char *canonify(const char *name)
 }
 
 /*
- * Return a pointer to the portion of str that comes after the last
- * slash (or backslash or colon, if `local' is TRUE).
- *
- * This function has the annoying strstr() property of taking a const
- * char * and returning a char *. You should treat it as if it was a
- * pair of overloaded functions, one mapping mutable->mutable and the
- * other const->const :-(
- */
-static char *stripslashes(const char *str, int local)
-{
-    char *p;
-
-    if (local) {
-        p = strchr(str, ':');
-        if (p) str = p+1;
-    }
-
-    p = strrchr(str, '/');
-    if (p) str = p+1;
-
-    if (local) {
-	p = strrchr(str, '\\');
-	if (p) str = p+1;
-    }
-
-    return (char *)str;
-}
-
-/*
  * qsort comparison routine for fxp_name structures. Sorts by real
  * file name.
  */
@@ -2647,6 +2618,10 @@ int sftp_senddata(char *buf, int len)
     back->send(backhandle, buf, len);
     return 1;
 }
+int sftp_sendbuffer(void)
+{
+    return back->sendbuffer(backhandle);
+}
 
 /*
  *  Short description of parameters.
@@ -2676,6 +2651,9 @@ static void usage(void)
     printf("  -hostkey aa:bb:cc:...\n");
     printf("            manually specify a host key (may be repeated)\n");
     printf("  -batch    disable all interactive prompts\n");
+    printf("  -sshlog file\n");
+    printf("  -sshrawlog file\n");
+    printf("            log protocol details to a file\n");
     cleanup_exit(1);
 }
 
@@ -2966,6 +2944,8 @@ int psftp_main(int argc, char *argv[])
     argc -= i;
     argv += i;
     back = NULL;
+
+    platform_psftp_post_option_setup();
 
     /*
      * If the loaded session provides a hostname, and a hostname has not

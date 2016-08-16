@@ -411,9 +411,9 @@ static int handle_cmp_evtomain(void *av, void *bv)
     struct handle *a = (struct handle *)av;
     struct handle *b = (struct handle *)bv;
 
-    if ((unsigned)a->u.g.ev_to_main < (unsigned)b->u.g.ev_to_main)
+    if ((uintptr_t)a->u.g.ev_to_main < (uintptr_t)b->u.g.ev_to_main)
 	return -1;
-    else if ((unsigned)a->u.g.ev_to_main > (unsigned)b->u.g.ev_to_main)
+    else if ((uintptr_t)a->u.g.ev_to_main > (uintptr_t)b->u.g.ev_to_main)
 	return +1;
     else
 	return 0;
@@ -424,9 +424,9 @@ static int handle_find_evtomain(void *av, void *bv)
     HANDLE *a = (HANDLE *)av;
     struct handle *b = (struct handle *)bv;
 
-    if ((unsigned)*a < (unsigned)b->u.g.ev_to_main)
+    if ((uintptr_t)*a < (uintptr_t)b->u.g.ev_to_main)
 	return -1;
-    else if ((unsigned)*a > (unsigned)b->u.g.ev_to_main)
+    else if ((uintptr_t)*a > (uintptr_t)b->u.g.ev_to_main)
 	return +1;
     else
 	return 0;
@@ -579,17 +579,18 @@ static void handle_destroy(struct handle *h)
 
 void handle_free(struct handle *h)
 {
-    /*
-     * If the handle is currently busy, we cannot immediately free
-     * it. Instead we must wait until it's finished its current
-     * operation, because otherwise the subthread will write to
-     * invalid memory after we free its context from under it.
-     */
     assert(h && !h->u.g.moribund);
-    if (h->u.g.busy) {
-	/*
-	 * Just set the moribund flag, which will be noticed next
-	 * time an operation completes.
+    if (h->u.g.busy && h->type != HT_FOREIGN) {
+        /*
+         * If the handle is currently busy, we cannot immediately free
+         * it, because its subthread is in the middle of something.
+         * (Exception: foreign handles don't have a subthread.)
+         *
+         * Instead we must wait until it's finished its current
+         * operation, because otherwise the subthread will write to
+         * invalid memory after we free its context from under it. So
+         * we set the moribund flag, which will be noticed next time
+         * an operation completes.
 	 */
 	h->u.g.moribund = TRUE;
     } else if (h->u.g.defunct) {

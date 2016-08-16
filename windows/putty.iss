@@ -13,10 +13,10 @@
 
 [Setup]
 AppName=PuTTY
-AppVerName=PuTTY version 0.65
-VersionInfoTextVersion=Release 0.65
-AppVersion=0.65
-VersionInfoVersion=0.65.0.0
+AppVerName=PuTTY version 0.67
+VersionInfoTextVersion=Release 0.67
+AppVersion=0.67
+VersionInfoVersion=0.67.0.0
 AppPublisher=Simon Tatham
 AppPublisherURL=http://www.chiark.greenend.org.uk/~sgtatham/putty/
 AppReadmeFile={app}\README.txt
@@ -28,6 +28,7 @@ ChangesAssociations=yes
 ;ChangesEnvironment=yes -- when PATH munging is sorted (probably)
 Compression=zip/9
 AllowNoIcons=yes
+OutputBaseFilename=installer
 
 [Files]
 ; We flag all files with "restartreplace" et al primarily for the benefit

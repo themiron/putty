@@ -88,8 +88,8 @@ void pageant_log(void *ctx, const char *fmt, va_list ap)
  * In Pageant our selects are synchronous, so these functions are
  * empty stubs.
  */
-int uxsel_input_add(int fd, int rwx) { return 0; }
-void uxsel_input_remove(int id) { }
+uxsel_id *uxsel_input_add(int fd, int rwx) { return NULL; }
+void uxsel_input_remove(uxsel_id *id) { }
 
 /*
  * More stubs.
@@ -103,6 +103,8 @@ FontSpec *platform_default_fontspec(const char *name) { return fontspec_new("");
 Filename *platform_default_filename(const char *name) { return filename_from_str(""); }
 char *x_get_default(const char *key) { return NULL; }
 void log_eventlog(void *handle, const char *event) {}
+int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
+{ assert(!"only here to satisfy notional call from backend_socket_log"); }
 
 /*
  * Short description of parameters.
@@ -191,11 +193,43 @@ struct X11Connection {
 };
 
 char *socketname;
+static enum { SHELL_AUTO, SHELL_SH, SHELL_CSH } shell_type = SHELL_AUTO;
 void pageant_print_env(int pid)
 {
-    printf("SSH_AUTH_SOCK=%s; export SSH_AUTH_SOCK;\n"
-           "SSH_AGENT_PID=%d; export SSH_AGENT_PID;\n",
-           socketname, (int)pid);
+    if (shell_type == SHELL_AUTO) {
+        /* Same policy as OpenSSH: if $SHELL ends in "csh" then assume
+         * it's csh-shaped. */
+        const char *shell = getenv("SHELL");
+        if (shell && strlen(shell) >= 3 &&
+            !strcmp(shell + strlen(shell) - 3, "csh"))
+            shell_type = SHELL_CSH;
+        else
+            shell_type = SHELL_SH;
+    }
+
+    /*
+     * These shell snippets could usefully pay some attention to
+     * escaping of interesting characters. I don't think it causes a
+     * problem at the moment, because the pathnames we use are so
+     * utterly boring, but it's a lurking bug waiting to happen once
+     * a bit more flexibility turns up.
+     */
+
+    switch (shell_type) {
+      case SHELL_SH:
+        printf("SSH_AUTH_SOCK=%s; export SSH_AUTH_SOCK;\n"
+               "SSH_AGENT_PID=%d; export SSH_AGENT_PID;\n",
+               socketname, pid);
+        break;
+      case SHELL_CSH:
+        printf("setenv SSH_AUTH_SOCK %s;\n"
+               "setenv SSH_AGENT_PID %d;\n",
+               socketname, pid);
+        break;
+      case SHELL_AUTO:
+        assert(0 && "Can't get here");
+        break;
+    }
 }
 
 void pageant_fork_and_print_env(int retain_tty)
@@ -965,6 +999,10 @@ int main(int argc, char **argv)
                 curr_keyact = KEYACT_CLIENT_ADD;
             } else if (!strcmp(p, "-d")) {
                 curr_keyact = KEYACT_CLIENT_DEL;
+            } else if (!strcmp(p, "-s")) {
+                shell_type = SHELL_SH;
+            } else if (!strcmp(p, "-c")) {
+                shell_type = SHELL_CSH;
             } else if (!strcmp(p, "-D")) {
                 add_keyact(KEYACT_CLIENT_DEL_ALL, NULL);
             } else if (!strcmp(p, "-l")) {

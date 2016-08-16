@@ -606,35 +606,6 @@ static char *colon(char *str)
 }
 
 /*
- * Return a pointer to the portion of str that comes after the last
- * slash (or backslash or colon, if `local' is TRUE).
- *
- * This function has the annoying strstr() property of taking a const
- * char * and returning a char *. You should treat it as if it was a
- * pair of overloaded functions, one mapping mutable->mutable and the
- * other const->const :-(
- */
-static char *stripslashes(const char *str, int local)
-{
-    char *p;
-
-    if (local) {
-        p = strchr(str, ':');
-        if (p) str = p+1;
-    }
-
-    p = strrchr(str, '/');
-    if (p) str = p+1;
-
-    if (local) {
-	p = strrchr(str, '\\');
-	if (p) str = p+1;
-    }
-
-    return (char *)str;
-}
-
-/*
  * Determine whether a string is entirely composed of dots.
  */
 static int is_dots(char *str)
@@ -686,6 +657,10 @@ int sftp_senddata(char *buf, int len)
 {
     back->send(backhandle, buf, len);
     return 1;
+}
+int sftp_sendbuffer(void)
+{
+    return back->sendbuffer(backhandle);
 }
 
 /* ----------------------------------------------------------------------
@@ -1524,7 +1499,7 @@ int scp_get_sink_action(struct scp_sink_action *act)
 	{
 	    char sizestr[40];
 	
-	    if (sscanf(act->buf, "%lo %s %n", &act->permissions,
+            if (sscanf(act->buf, "%lo %39s %n", &act->permissions,
                        sizestr, &i) != 2)
 		bump("Protocol error: Illegal file descriptor format");
 	    act->size = uint64_from_decimal(sizestr);
@@ -1740,11 +1715,12 @@ static void source(const char *src)
     stat_starttime = time(NULL);
     stat_lasttime = 0;
 
+#define PSCP_SEND_BLOCK 4096
     for (i = uint64_make(0,0);
 	 uint64_compare(i,size) < 0;
-	 i = uint64_add32(i,4096)) {
-	char transbuf[4096];
-	int j, k = 4096;
+	 i = uint64_add32(i,PSCP_SEND_BLOCK)) {
+	char transbuf[PSCP_SEND_BLOCK];
+	int j, k = PSCP_SEND_BLOCK;
 
 	if (uint64_compare(uint64_add32(i, k),size) > 0) /* i + k > size */ 
 	    k = (uint64_subtract(size, i)).lo; 	/* k = size - i; */
@@ -2268,6 +2244,9 @@ static void usage(void)
     printf("  -unsafe   allow server-side wildcards (DANGEROUS)\n");
     printf("  -sftp     force use of SFTP protocol\n");
     printf("  -scp      force use of SCP protocol\n");
+    printf("  -sshlog file\n");
+    printf("  -sshrawlog file\n");
+    printf("            log protocol details to a file\n");
 #if 0
     /*
      * -gui is an internal option, used by GUI front ends to get
@@ -2374,6 +2353,8 @@ int psftp_main(int argc, char *argv[])
     argc -= i;
     argv += i;
     back = NULL;
+
+    platform_psftp_post_option_setup();
 
     if (list) {
 	if (argc != 1)

@@ -466,6 +466,49 @@ static void kexlist_handler(union control *ctrl, void *dlg,
     }
 }
 
+static void hklist_handler(union control *ctrl, void *dlg,
+                            void *data, int event)
+{
+    Conf *conf = (Conf *)data;
+    if (event == EVENT_REFRESH) {
+        int i;
+
+        static const struct { const char *s; int k; } hks[] = {
+            { "Ed25519",               HK_ED25519 },
+            { "ECDSA",                 HK_ECDSA },
+            { "DSA",                   HK_DSA },
+            { "RSA",                   HK_RSA },
+            { "-- warn below here --", HK_WARN }
+        };
+
+        /* Set up the "host key preference" box. */
+        /* (hklist assumed to contain all algorithms) */
+        dlg_update_start(ctrl, dlg);
+        dlg_listbox_clear(ctrl, dlg);
+        for (i = 0; i < HK_MAX; i++) {
+            int k = conf_get_int_int(conf, CONF_ssh_hklist, i);
+            int j;
+            const char *kstr = NULL;
+            for (j = 0; j < lenof(hks); j++) {
+                if (hks[j].k == k) {
+                    kstr = hks[j].s;
+                    break;
+                }
+            }
+            dlg_listbox_addwithid(ctrl, dlg, kstr, k);
+        }
+        dlg_update_done(ctrl, dlg);
+
+    } else if (event == EVENT_VALCHANGE) {
+        int i;
+
+        /* Update array to match the list box. */
+        for (i=0; i < HK_MAX; i++)
+            conf_set_int_int(conf, CONF_ssh_hklist, i,
+                             dlg_listbox_getid(ctrl, dlg, i));
+    }
+}
+
 static void printerbox_handler(union control *ctrl, void *dlg,
 			       void *data, int event)
 {
@@ -1478,7 +1521,7 @@ void setup_config_box(struct controlbox *b, int midsession,
 		 HELPCTX(logging_filename),
 		 conf_filesel_handler, I(CONF_logfilename));
     ctrl_text(s, "(Log file name can contain &Y, &M, &D for date,"
-	      " &T for time, and &H for host name)",
+	      " &T for time, &H for host name, and &P for port number)",
 	      HELPCTX(logging_filename));
     ctrl_radiobuttons(s, "What to do if the log file already exists:", 'e', 1,
 		      HELPCTX(logging_exists),
@@ -2072,6 +2115,15 @@ void setup_config_box(struct controlbox *b, int midsession,
 		     HELPCTX(proxy_command),
 		     conf_editbox_handler,
 		     I(CONF_proxy_telnet_command), I(1));
+
+	ctrl_radiobuttons(s, "Print proxy diagnostics "
+                          "in the terminal window", 'r', 5,
+			  HELPCTX(proxy_main),
+			  conf_radiobutton_handler,
+			  I(CONF_proxy_log_to_term),
+			  "No", I(FORCE_OFF),
+			  "Yes", I(FORCE_ON),
+			  "Only until session starts", I(AUTO), NULL);
     }
 
     /*
@@ -2196,14 +2248,12 @@ void setup_config_box(struct controlbox *b, int midsession,
 	if (!midsession) {
 	    s = ctrl_getset(b, "Connection/SSH", "protocol", "Protocol options");
 
-	    ctrl_radiobuttons(s, "Preferred SSH protocol version:", NO_SHORTCUT, 4,
+	    ctrl_radiobuttons(s, "SSH protocol version:", NO_SHORTCUT, 2,
 			      HELPCTX(ssh_protocol),
 			      conf_radiobutton_handler,
 			      I(CONF_sshprot),
-			      "1 only", 'l', I(0),
-			      "1", '1', I(1),
-			      "2", '2', I(2),
-			      "2 only", 'y', I(3), NULL);
+			      "2", '2', I(3),
+			      "1 (INSECURE)", '1', I(0), NULL);
 	}
 
 	/*
@@ -2241,12 +2291,27 @@ void setup_config_box(struct controlbox *b, int midsession,
 	}
 
 	/*
+	 * The 'Connection/SSH/Host keys' panel.
+	 */
+	if (protcfginfo != 1 && protcfginfo != -1) {
+	    ctrl_settitle(b, "Connection/SSH/Host keys",
+			  "Options controlling SSH host keys");
+
+	    s = ctrl_getset(b, "Connection/SSH/Host keys", "main",
+			    "Host key algorithm preference");
+	    c = ctrl_draglist(s, "Algorithm selection policy:", 's',
+			      HELPCTX(ssh_hklist),
+			      hklist_handler, P(NULL));
+	    c->listbox.height = 5;
+	}
+
+	/*
 	 * Manual host key configuration is irrelevant mid-session,
 	 * as we enforce that the host key for rekeys is the
 	 * same as that used at the start of the session.
 	 */
 	if (!midsession) {
-	    s = ctrl_getset(b, "Connection/SSH/Kex", "hostkeys",
+	    s = ctrl_getset(b, "Connection/SSH/Host keys", "hostkeys",
 			    "Manually configure host keys for this connection");
 
             ctrl_columns(s, 2, 75, 25);
@@ -2312,14 +2377,14 @@ void setup_config_box(struct controlbox *b, int midsession,
 			  "Options controlling SSH authentication");
 
 	    s = ctrl_getset(b, "Connection/SSH/Auth", "main", NULL);
-	    ctrl_checkbox(s, "Bypass authentication entirely (SSH-2 only)", 'b',
-			  HELPCTX(ssh_auth_bypass),
-			  conf_checkbox_handler,
-			  I(CONF_ssh_no_userauth));
 	    ctrl_checkbox(s, "Display pre-authentication banner (SSH-2 only)",
 			  'd', HELPCTX(ssh_auth_banner),
 			  conf_checkbox_handler,
 			  I(CONF_ssh_show_banner));
+	    ctrl_checkbox(s, "Bypass authentication entirely (SSH-2 only)", 'b',
+			  HELPCTX(ssh_auth_bypass),
+			  conf_checkbox_handler,
+			  I(CONF_ssh_no_userauth));
 
 	    s = ctrl_getset(b, "Connection/SSH/Auth", "methods",
 			    "Authentication methods");
@@ -2575,27 +2640,21 @@ void setup_config_box(struct controlbox *b, int midsession,
 
 	    s = ctrl_getset(b, "Connection/SSH/Bugs", "main",
 			    "Detection of known bugs in SSH servers");
-	    ctrl_droplist(s, "Chokes on SSH-1 ignore messages", 'i', 20,
-			  HELPCTX(ssh_bugs_ignore1),
-			  sshbug_handler, I(CONF_sshbug_ignore1));
-	    ctrl_droplist(s, "Refuses all SSH-1 password camouflage", 's', 20,
-			  HELPCTX(ssh_bugs_plainpw1),
-			  sshbug_handler, I(CONF_sshbug_plainpw1));
-	    ctrl_droplist(s, "Chokes on SSH-1 RSA authentication", 'r', 20,
-			  HELPCTX(ssh_bugs_rsa1),
-			  sshbug_handler, I(CONF_sshbug_rsa1));
 	    ctrl_droplist(s, "Chokes on SSH-2 ignore messages", '2', 20,
 			  HELPCTX(ssh_bugs_ignore2),
 			  sshbug_handler, I(CONF_sshbug_ignore2));
+	    ctrl_droplist(s, "Handles SSH-2 key re-exchange badly", 'k', 20,
+			  HELPCTX(ssh_bugs_rekey2),
+			  sshbug_handler, I(CONF_sshbug_rekey2));
 	    ctrl_droplist(s, "Chokes on PuTTY's SSH-2 'winadj' requests", 'j',
                           20, HELPCTX(ssh_bugs_winadj),
 			  sshbug_handler, I(CONF_sshbug_winadj));
-	    ctrl_droplist(s, "Miscomputes SSH-2 HMAC keys", 'm', 20,
-			  HELPCTX(ssh_bugs_hmac2),
-			  sshbug_handler, I(CONF_sshbug_hmac2));
-	    ctrl_droplist(s, "Miscomputes SSH-2 encryption keys", 'e', 20,
-			  HELPCTX(ssh_bugs_derivekey2),
-			  sshbug_handler, I(CONF_sshbug_derivekey2));
+	    ctrl_droplist(s, "Replies to requests on closed channels", 'q', 20,
+			  HELPCTX(ssh_bugs_chanreq),
+			  sshbug_handler, I(CONF_sshbug_chanreq));
+	    ctrl_droplist(s, "Ignores SSH-2 maximum packet size", 'x', 20,
+			  HELPCTX(ssh_bugs_maxpkt2),
+			  sshbug_handler, I(CONF_sshbug_maxpkt2));
 
 	    ctrl_settitle(b, "Connection/SSH/More bugs",
 			  "Further workarounds for SSH server bugs");
@@ -2605,21 +2664,27 @@ void setup_config_box(struct controlbox *b, int midsession,
 	    ctrl_droplist(s, "Requires padding on SSH-2 RSA signatures", 'p', 20,
 			  HELPCTX(ssh_bugs_rsapad2),
 			  sshbug_handler, I(CONF_sshbug_rsapad2));
-	    ctrl_droplist(s, "Misuses the session ID in SSH-2 PK auth", 'n', 20,
-			  HELPCTX(ssh_bugs_pksessid2),
-			  sshbug_handler, I(CONF_sshbug_pksessid2));
-	    ctrl_droplist(s, "Handles SSH-2 key re-exchange badly", 'k', 20,
-			  HELPCTX(ssh_bugs_rekey2),
-			  sshbug_handler, I(CONF_sshbug_rekey2));
-	    ctrl_droplist(s, "Ignores SSH-2 maximum packet size", 'x', 20,
-			  HELPCTX(ssh_bugs_maxpkt2),
-			  sshbug_handler, I(CONF_sshbug_maxpkt2));
 	    ctrl_droplist(s, "Only supports pre-RFC4419 SSH-2 DH GEX", 'd', 20,
 			  HELPCTX(ssh_bugs_oldgex2),
 			  sshbug_handler, I(CONF_sshbug_oldgex2));
-	    ctrl_droplist(s, "Replies to requests on closed channels", 'q', 20,
-			  HELPCTX(ssh_bugs_chanreq),
-			  sshbug_handler, I(CONF_sshbug_chanreq));
+	    ctrl_droplist(s, "Miscomputes SSH-2 HMAC keys", 'm', 20,
+			  HELPCTX(ssh_bugs_hmac2),
+			  sshbug_handler, I(CONF_sshbug_hmac2));
+	    ctrl_droplist(s, "Misuses the session ID in SSH-2 PK auth", 'n', 20,
+			  HELPCTX(ssh_bugs_pksessid2),
+			  sshbug_handler, I(CONF_sshbug_pksessid2));
+	    ctrl_droplist(s, "Miscomputes SSH-2 encryption keys", 'e', 20,
+			  HELPCTX(ssh_bugs_derivekey2),
+			  sshbug_handler, I(CONF_sshbug_derivekey2));
+	    ctrl_droplist(s, "Chokes on SSH-1 ignore messages", 'i', 20,
+			  HELPCTX(ssh_bugs_ignore1),
+			  sshbug_handler, I(CONF_sshbug_ignore1));
+	    ctrl_droplist(s, "Refuses all SSH-1 password camouflage", 's', 20,
+			  HELPCTX(ssh_bugs_plainpw1),
+			  sshbug_handler, I(CONF_sshbug_plainpw1));
+	    ctrl_droplist(s, "Chokes on SSH-1 RSA authentication", 'r', 20,
+			  HELPCTX(ssh_bugs_rsa1),
+			  sshbug_handler, I(CONF_sshbug_rsa1));
 	}
     }
 }
