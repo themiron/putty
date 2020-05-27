@@ -10,25 +10,11 @@ const int be_default_protocol = PROT_TELNET;
 
 const char *const appname = "PuTTYtel";
 
-Backend *backends[] = {
+const struct BackendVtable *const backends[] = {
     &telnet_backend,
     &rlogin_backend,
+    &supdup_backend,
     &raw_backend,
     &serial_backend,
     NULL
 };
-
-/*
- * Stub implementations of functions not used in non-ssh versions.
- */
-void random_save_seed(void)
-{
-}
-
-void random_destroy_seed(void)
-{
-}
-
-void noise_ultralight(unsigned long data)
-{
-}

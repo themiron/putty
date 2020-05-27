@@ -4,7 +4,7 @@
 
 \S{putty-manpage-name} NAME
 
-\cw{putty} - GUI SSH, Telnet and Rlogin client for X
+\cw{putty} - GUI SSH, Telnet, Rlogin and SUPDUP client for X
 
 \S{putty-manpage-synopsis} SYNOPSIS
 
@@ -13,8 +13,8 @@
 
 \S{putty-manpage-description} DESCRIPTION
 
-\cw{putty} is a graphical SSH, Telnet and Rlogin client for X. It is
-a direct port of the Windows SSH client of the same name.
+\cw{putty} is a graphical SSH, Telnet, Rlogin and SUPDUP client for
+X. It is a direct port of the Windows SSH client of the same name.
 
 \S{putty-manpage-options} OPTIONS
 
@@ -321,7 +321,7 @@ your home directory.
 For more information on PuTTY, it's probably best to go and look at
 the manual on the web page:
 
-\W{http://www.chiark.greenend.org.uk/~sgtatham/putty/}\cw{http://www.chiark.greenend.org.uk/~sgtatham/putty/}
+\W{https://www.chiark.greenend.org.uk/~sgtatham/putty/}\cw{https://www.chiark.greenend.org.uk/~sgtatham/putty/}
 
 \S{putty-manpage-bugs} BUGS
 

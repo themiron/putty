@@ -10,16 +10,18 @@ use File::Find;
 use File::Temp qw/tempdir/;
 use LWP::UserAgent;
 
-my $version = undef; 
+my $version = undef;
 my $setver = 0;
 my $upload = 0;
 my $precheck = 0;
 my $postcheck = 0;
+my $skip_ftp = 0;
 GetOptions("version=s" => \$version,
            "setver" => \$setver,
            "upload" => \$upload,
            "precheck" => \$precheck,
-           "postcheck" => \$postcheck)
+           "postcheck" => \$postcheck,
+           "no-ftp" => \$skip_ftp)
     or &usage();
 
 # --set-version: construct a local commit which updates the version
@@ -29,10 +31,12 @@ if ($setver) {
     0 == system "git", "diff-index", "--quiet", "--cached", "HEAD"
         or die "index is dirty";
     0 == system "git", "diff-files", "--quiet" or die "working tree is dirty";
-    -f "Makefile" and die "run 'make distclean' first";
     my $builddir = tempdir(DIR => ".", CLEANUP => 1);
-    0 == system "./mkfiles.pl" or die;
-    0 == system "cd $builddir && ../configure" or die;
+    0 == system "git archive --format=tar HEAD | ( cd $builddir && tar xf - )"
+        or die;
+    0 == system "cd $builddir && ./mkfiles.pl" or die;
+    0 == system "cd $builddir && ./mkauto.sh" or die;
+    0 == system "cd $builddir && ./configure" or die;
     0 == system "cd $builddir && make pscp plink RELEASE=${version}" or die;
     our $pscp_transcript = `cd $builddir && ./pscp --help`;
     $pscp_transcript =~ s/^Unidentified build/Release ${version}/m or die;
@@ -41,8 +45,6 @@ if ($setver) {
     $plink_transcript =~ s/^Unidentified build/Release ${version}/m or die;
     $plink_transcript =~ s/^/\\c /mg;
     &transform("LATEST.VER", sub { s/^\d+\.\d+$/$version/ });
-    &transform("windows/putty.iss", sub {
-        s/^(AppVerName=PuTTY version |VersionInfoTextVersion=Release |AppVersion=|VersionInfoVersion=)\d+\.\d+/$1$version/ });
     our $transforming = 0;
     &transform("doc/pscp.but", sub {
         if (/^\\c.*>pscp$/) { $transforming = 1; $_ .= $pscp_transcript; }
@@ -72,12 +74,12 @@ if ($upload) {
     -d "putty" or die "no putty directory in cwd";
 
     0 == system("rsync", "-av", "maps/",
-                "atreus:src/putty-local/maps-$version")
+                "thyestes:src/putty-local/maps-$version")
         or die "could not upload link maps";
 
-    for my $location (["atreus", "www/putty/$version"],
-                      ["the",    "www/putty/$version"],
-                      ["chiark", "ftp/putty-$version"]) {
+    for my $location (["thyestes", "www/putty/$version"],
+                      ["the",      "www/putty/$version"],
+                      ["chiark",   "ftp/putty-$version"]) {
         my ($host, $path) = @$location;
         0 == system("rsync", "-av", "putty/", "$host:$path")
             or die "could not upload release to $host";
@@ -96,7 +98,7 @@ if ($upload) {
                        }
                    } elsif (m!^putty/(.*sum)s!) {
                        print $pipe "echo checking ${1}s\n";
-                       print $pipe "$1 -c ${1}s\n";
+                       print $pipe "grep -vF ' (installer version)' ${1}s | grep . | $1 -c\n";
                    }
                }, no_chdir => 1}, "putty");
         print $pipe "echo all verified ok\n";
@@ -161,11 +163,13 @@ if ($precheck || $postcheck) {
                    }
 
                    # Now test-download the files themselves.
-                   my $ftpdata = `curl -s $ftp_uri`;
-                   printf "  got %d bytes via FTP", length $ftpdata;
-                   die "FTP download for $ftp_uri did not match"
-                       if $ftpdata ne $real_content;
-                   print ", ok\n";
+                   unless ($skip_ftp) {
+                       my $ftpdata = `curl -s $ftp_uri`;
+                       printf "  got %d bytes via FTP", length $ftpdata;
+                       die "FTP download for $ftp_uri did not match"
+                           if $ftpdata ne $real_content;
+                       print ", ok\n";
+                   }
 
                    my $ua = LWP::UserAgent->new;
                    my $httpresponse = $ua->get($http_uri);

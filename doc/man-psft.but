@@ -82,6 +82,13 @@ very useful in this context.)
 
 \dd Disable interactive prompts.
 
+\dt \cw{-no-sanitise-stderr}
+
+\dd By default, PSFTP will filter control characters from the standard error
+channel from the server, to prevent remote processes sending confusing
+escape sequences. This option forces the standard error channel to not be
+filtered.
+
 \dt \cw{-pw} \e{password}
 
 \dd Set remote password to \e{password}. \e{CAUTION:} this will likely
@@ -159,7 +166,7 @@ at the \cw{psftp>} prompt.
 For more information on \cw{psftp} it's probably best to go and look at
 the manual on the PuTTY web page:
 
-\cw{http://www.chiark.greenend.org.uk/~sgtatham/putty/}
+\cw{https://www.chiark.greenend.org.uk/~sgtatham/putty/}
 
 \S{psftp-manpage-bugs} BUGS
 

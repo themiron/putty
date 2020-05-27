@@ -1,4 +1,4 @@
-#!/bin/sh 
+#!/bin/sh
 
 # Generate GPG signatures on a PuTTY release/snapshot directory as
 # delivered by Buildscr.
@@ -9,12 +9,28 @@
 
 set -e
 
-keyname=EEF20295D15F7E8A
+keyname=38BA7229B7588FD1
+preliminary=false
 
-if test "x$1" = "x-r"; then
-    shift
-    keyname=9DFE2648B43434E4
-fi
+while :; do
+    case "$1" in
+        -r)
+            shift
+            keyname=6289A25F4AE8DA82
+            ;;
+        -p)
+            shift
+            preliminary=true
+            ;;
+        -*)
+            echo "Unknown option '$1'" >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 sign() {
   # Check for the prior existence of the signature, so we can
@@ -27,9 +43,18 @@ sign() {
 
 cd "$1"
 echo "===== Signing with key '$keyname'"
-for i in putty*src.zip putty*.tar.gz w32/*.exe w32/*.zip w32/*.msi w64/*.exe w64/*.zip w64/*.msi w32old/*.exe w32old/*.zip; do
-    sign --detach-sign "$i" "$i.gpg"
-done
-for i in md5sums sha1sums sha256sums sha512sums; do
-    sign --clearsign "$i" "$i.gpg"
-done
+if $preliminary; then
+    sign --clearsign sha512sums ../sha512sums-preliminary.gpg
+else
+    for i in putty*src.zip putty*.tar.gz \
+             w32/*.exe w32/*.zip w32/*.msi \
+             w64/*.exe w64/*.zip w64/*.msi \
+             wa32/*.exe wa32/*.zip wa32/*.msi \
+             wa64/*.exe wa64/*.zip wa64/*.msi \
+             w32old/*.exe w32old/*.zip; do
+        sign --detach-sign "$i" "$i.gpg"
+    done
+    for i in md5sums sha1sums sha256sums sha512sums; do
+        sign --clearsign "$i" "$i.gpg"
+    done
+fi

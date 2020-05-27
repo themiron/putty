@@ -7,7 +7,6 @@
 
 #if !defined NO_SECURITY
 
-#define DEFINE_PLUG_METHOD_MACROS
 #include "tree234.h"
 #include "putty.h"
 #include "network.h"
@@ -17,96 +16,8 @@
 #include "wincapi.h"
 #include "winsecur.h"
 
-#if defined(COVERITY) || defined(__MINGW32__)
-/*
- * The hack I use to build for Coverity scanning, using winegcc and
- * Makefile.mgw, didn't provide some defines in wincrypt.h last time I
- * looked. Therefore, define them myself here, but enclosed in #ifdef
- * COVERITY to ensure I don't make up random nonsense values for any
- * real build.
- */
-#ifndef CRYPTPROTECTMEMORY_BLOCK_SIZE
-#define CRYPTPROTECTMEMORY_BLOCK_SIZE 16
-#endif
-#ifndef CRYPTPROTECTMEMORY_CROSS_PROCESS
-#define CRYPTPROTECTMEMORY_CROSS_PROCESS 1
-#endif
-#endif
-
 #define CONNSHARE_PIPE_PREFIX "\\\\.\\pipe\\putty-connshare"
 #define CONNSHARE_MUTEX_PREFIX "Local\\putty-connshare-mutex"
-
-static char *obfuscate_name(const char *realname)
-{
-    /*
-     * Windows's named pipes all live in the same namespace, so one
-     * user can see what pipes another user has open. This is an
-     * undesirable privacy leak and in particular permits one user to
-     * know what username@host another user is SSHing to, so we
-     * protect that information by using CryptProtectMemory (which
-     * uses a key built in to each user's account).
-     */
-    char *cryptdata;
-    int cryptlen;
-    SHA256_State sha;
-    unsigned char lenbuf[4];
-    unsigned char digest[32];
-    char retbuf[65];
-    int i;
-
-    cryptlen = strlen(realname) + 1;
-    cryptlen += CRYPTPROTECTMEMORY_BLOCK_SIZE - 1;
-    cryptlen /= CRYPTPROTECTMEMORY_BLOCK_SIZE;
-    cryptlen *= CRYPTPROTECTMEMORY_BLOCK_SIZE;
-
-    cryptdata = snewn(cryptlen, char);
-    memset(cryptdata, 0, cryptlen);
-    strcpy(cryptdata, realname);
-
-    /*
-     * CRYPTPROTECTMEMORY_CROSS_PROCESS causes CryptProtectMemory to
-     * use the same key in all processes with this user id, meaning
-     * that the next PuTTY process calling this function with the same
-     * input will get the same data.
-     *
-     * (Contrast with CryptProtectData, which invents a new session
-     * key every time since its API permits returning more data than
-     * was input, so calling _that_ and hashing the output would not
-     * be stable.)
-     *
-     * We don't worry too much if this doesn't work for some reason.
-     * Omitting this step still has _some_ privacy value (in that
-     * another user can test-hash things to confirm guesses as to
-     * where you might be connecting to, but cannot invert SHA-256 in
-     * the absence of any plausible guess). So we don't abort if we
-     * can't call CryptProtectMemory at all, or if it fails.
-     */
-    if (got_crypt())
-        p_CryptProtectMemory(cryptdata, cryptlen,
-                             CRYPTPROTECTMEMORY_CROSS_PROCESS);
-
-    /*
-     * We don't want to give away the length of the hostname either,
-     * so having got it back out of CryptProtectMemory we now hash it.
-     */
-    SHA256_Init(&sha);
-    PUT_32BIT_MSB_FIRST(lenbuf, cryptlen);
-    SHA256_Bytes(&sha, lenbuf, 4);
-    SHA256_Bytes(&sha, cryptdata, cryptlen);
-    SHA256_Final(&sha, digest);
-
-    sfree(cryptdata);
-
-    /*
-     * Finally, make printable.
-     */
-    for (i = 0; i < 32; i++) {
-        sprintf(retbuf + 2*i, "%02x", digest[i]);
-        /* the last of those will also write the trailing NUL */
-    }
-
-    return dupstr(retbuf);
-}
 
 static char *make_name(const char *prefix, const char *name)
 {
@@ -119,17 +30,14 @@ static char *make_name(const char *prefix, const char *name)
     return retname;
 }
 
-Socket new_named_pipe_client(const char *pipename, Plug plug);
-Socket new_named_pipe_listener(const char *pipename, Plug plug);
-
 int platform_ssh_share(const char *pi_name, Conf *conf,
-                       Plug downplug, Plug upplug, Socket *sock,
+                       Plug *downplug, Plug *upplug, Socket **sock,
                        char **logtext, char **ds_err, char **us_err,
-                       int can_upstream, int can_downstream)
+                       bool can_upstream, bool can_downstream)
 {
     char *name, *mutexname, *pipename;
     HANDLE mutex;
-    Socket retsock;
+    Socket *retsock;
     PSECURITY_DESCRIPTOR psd;
     PACL acl;
 
@@ -140,7 +48,7 @@ int platform_ssh_share(const char *pi_name, Conf *conf,
      * that it also eliminates any characters illegal in Windows pipe
      * names.
      */
-    name = obfuscate_name(pi_name);
+    name = capi_obfuscate_string(pi_name);
     if (!name) {
         *logtext = dupprintf("Unable to call CryptProtectMemory: %s",
                              win_strerror(GetLastError()));
@@ -165,9 +73,9 @@ int platform_ssh_share(const char *pi_name, Conf *conf,
         memset(&sa, 0, sizeof(sa));
         sa.nLength = sizeof(sa);
         sa.lpSecurityDescriptor = psd;
-        sa.bInheritHandle = FALSE;
+        sa.bInheritHandle = false;
 
-        mutex = CreateMutex(&sa, FALSE, mutexname);
+        mutex = CreateMutex(&sa, false, mutexname);
 
         if (!mutex) {
             *logtext = dupprintf("CreateMutex(\"%s\") failed: %s",

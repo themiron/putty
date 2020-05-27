@@ -40,18 +40,18 @@
 \IM{different usernames}{changes of username} login names, different
 \IM{different usernames}{changes of username} account names, different
 
-\IM{differences between SSH, Telnet and Rlogin} differences between
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} differences between
 SSH, Telnet and Rlogin
-\IM{differences between SSH, Telnet and Rlogin} protocols,
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} protocols,
 differences between
-\IM{differences between SSH, Telnet and Rlogin} SSH, differences
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} SSH, differences
 from Telnet and Rlogin
-\IM{differences between SSH, Telnet and Rlogin} Telnet, differences
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} Telnet, differences
 from SSH and Rlogin
-\IM{differences between SSH, Telnet and Rlogin} Rlogin, differences
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} Rlogin, differences
 from SSH and Telnet
-\IM{differences between SSH, Telnet and Rlogin} selecting a protocol
-\IM{differences between SSH, Telnet and Rlogin} choosing a protocol
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} selecting a protocol
+\IM{differences between SSH, Telnet, Rlogin and SUPDUP} choosing a protocol
 
 \IM{MUD}{MUDs} MUDs
 
@@ -73,7 +73,7 @@ from SSH and Telnet
 \IM{three-button mouse} mouse, three-button
 
 \IM{left mouse button}{left button} left mouse button
-\IM{middle mouse button}{middle button} middle mouse button
+\IM{middle mouse button}{middle button}{middle-clicking} middle mouse button
 \IM{right mouse button}{right button} right mouse button
 
 \IM{selecting words}{word-by-word selection} selecting whole words
@@ -91,6 +91,18 @@ from SSH and Telnet
 
 \IM{right mouse button, with Ctrl} right mouse button, with Ctrl
 \IM{right mouse button, with Ctrl} Ctrl, with right mouse button
+
+\IM{selections} selections, multiple
+\IM{selections} clipboards, multiple
+
+\IM{PRIMARY} \c{PRIMARY} selection
+\IM{PRIMARY} selection, \c{PRIMARY}
+
+\IM{CLIPBOARD selection} \c{CLIPBOARD} selection
+\IM{CLIPBOARD selection} selection, \c{CLIPBOARD}
+
+\IM{SECONDARY} \c{SECONDARY} selection
+\IM{SECONDARY} selection, \c{SECONDARY}
 
 \IM{system menu} system menu
 \IM{system menu} menu, system
@@ -340,6 +352,12 @@ saved sessions from
 \IM{remote-controlled printing} ANSI printing
 \IM{remote-controlled printing} remote-controlled printing
 \IM{remote-controlled printing} printing, remote-controlled
+\IM{remote-controlled printing} passthrough printing
+
+\IM{Control-H} Control-H
+\IM{Control-H} Ctrl-H
+\IM{Control-?} Control-?
+\IM{Control-?} Ctrl-?
 
 \IM{Home and End keys} Home key
 \IM{Home and End keys} End key
@@ -777,6 +795,9 @@ saved sessions from
 \IM{DSA} DSA
 \IM{DSA} Digital Signature Standard
 
+\IM{EdDSA} EdDSA
+\IM{EdDSA} Edwards-curve DSA
+
 \IM{public-key algorithm} public-key algorithm
 \IM{public-key algorithm} asymmetric key algorithm
 \IM{public-key algorithm} algorithm, public-key
@@ -786,6 +807,12 @@ saved sessions from
 \IM{generating keys} key pairs, generating
 \IM{generating keys} public keys, generating
 \IM{generating keys} private keys, generating
+
+\IM{probable primes} probable primes
+\IM{probable primes} primes, probable
+
+\IM{proven primes} proven primes
+\IM{proven primes} primes, proven
 
 \IM{authorized_keys file}{authorized_keys} \cw{authorized_keys} file
 
@@ -829,9 +856,6 @@ saved sessions from
 \IM{login scripts}{startup scripts} login scripts
 \IM{login scripts}{startup scripts} startup scripts
 
-\IM{WS2_32.DLL} \cw{WS2_32.DLL}
-\IM{WS2_32.DLL} WinSock version 2
-
 \IM{Red Hat Linux} Red Hat Linux
 \IM{Red Hat Linux} Linux, Red Hat
 
@@ -859,6 +883,9 @@ saved sessions from
 \IM{GSSAPI credential delegation} credential delegation, GSSAPI
 \IM{GSSAPI credential delegation} delegation, of GSSAPI credentials
 
+\IM{cascading credentials} cascading credentials
+\IM{cascading credentials} credentials, cascading
+
 \IM{SYSTEM32} \cw{SYSTEM32} directory, on Windows
 
 \IM{32-bit Windows} 32-bit Windows
@@ -875,3 +902,7 @@ saved sessions from
 \IM{proxy logging} logging, proxy
 \IM{proxy logging} diagnostic, proxy
 \IM{proxy logging} standard error, proxy
+
+\IM{PuTTY icon} PuTTY icon
+\IM{PuTTY icon} icon, PuTTY's
+\IM{PuTTY icon} logo, PuTTY's
