@@ -4291,36 +4291,78 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
     /* If a key is pressed and AltGr is not active */
     if (key_down && (keystate[VK_RMENU] & 0x80) == 0 && !compose_state) {
         /* Okay, prepare for most alts then ... */
-        if (left_alt)
+        if (left_alt) switch (wParam) {
+          /* functional keys */
+          case VK_F1:
+          case VK_F2:
+          case VK_F3:
+          case VK_F4:
+          case VK_F5:
+          case VK_F6:
+          case VK_F7:
+          case VK_F8:
+          case VK_F9:
+          case VK_F10:
+          case VK_F11:
+          case VK_F12:
+          case VK_F13:
+          case VK_F14:
+          case VK_F15:
+          case VK_F16:
+          case VK_F17:
+          case VK_F18:
+          case VK_F19:
+          case VK_F20:
+          /* arrow keys */
+          case VK_UP:
+          case VK_DOWN:
+          case VK_RIGHT:
+          case VK_LEFT:
+          case VK_CLEAR:
+            if (term->funky_type == FUNKY_TILDE && !term->vt52_mode)
+                break;
+            /* fall through */
+          default:
             *p++ = '\033';
+        }
 
         /* Lets see if it's a pattern we know all about ... */
-        if (wParam == VK_PRIOR && shift_state == 1) {
+        if (wParam == VK_PRIOR && shift_state == 1 &&
+            !conf_get_bool(conf, CONF_no_shift_page)) {
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_PAGEUP, 0);
             return 0;
         }
-        if (wParam == VK_PRIOR && shift_state == 3) { /* ctrl-shift-pageup */
+        if (wParam == VK_PRIOR && shift_state == 3 &&
+            !conf_get_bool(conf, CONF_no_shift_page) &&
+            !conf_get_bool(conf, CONF_no_ctrl_page)) { /* ctrl-shift-pageup */
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_TOP, 0);
             return 0;
         }
-        if (wParam == VK_NEXT && shift_state == 3) { /* ctrl-shift-pagedown */
+        if (wParam == VK_NEXT && shift_state == 3 &&
+            !conf_get_bool(conf, CONF_no_shift_page) &&
+            !conf_get_bool(conf, CONF_no_ctrl_page)) { /* ctrl-shift-pagedown */
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_BOTTOM, 0);
             return 0;
         }
 
-        if (wParam == VK_PRIOR && shift_state == 2) {
+        if (wParam == VK_PRIOR && shift_state == 2 &&
+            !conf_get_bool(conf, CONF_no_ctrl_page)) {
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_LINEUP, 0);
             return 0;
         }
-        if (wParam == VK_NEXT && shift_state == 1) {
+        if (wParam == VK_NEXT && shift_state == 1 &&
+            !conf_get_bool(conf, CONF_no_shift_page)) {
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_PAGEDOWN, 0);
             return 0;
         }
-        if (wParam == VK_NEXT && shift_state == 2) {
+        if (wParam == VK_NEXT && shift_state == 2 &&
+            !conf_get_bool(conf, CONF_no_ctrl_page)) {
             SendMessage(wgs.term_hwnd, WM_VSCROLL, SB_LINEDOWN, 0);
             return 0;
         }
-        if ((wParam == VK_PRIOR || wParam == VK_NEXT) && shift_state == 3) {
+        if ((wParam == VK_PRIOR || wParam == VK_NEXT) && shift_state == 3 &&
+            !conf_get_bool(conf, CONF_no_shift_page) &&
+            !conf_get_bool(conf, CONF_no_ctrl_page)) {
             term_scroll_to_selection(term, (wParam == VK_PRIOR ? 0 : 1));
             return 0;
         }
@@ -4395,12 +4437,16 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
             return 0;
         }
 
-        if (wParam == VK_BACK && shift_state == 0) {    /* Backspace */
+        if (wParam == VK_BACK && (shift_state & 2)) {   /* Ctrl Backspace */
+            if (!left_alt)
+                *p++ = 0x1B;
+        }
+        if (wParam == VK_BACK && (shift_state & 1) == 0) {    /* Backspace */
             *p++ = (conf_get_bool(conf, CONF_bksp_is_delete) ? 0x7F : 0x08);
             *p++ = 0;
             return -2;
         }
-        if (wParam == VK_BACK && shift_state == 1) {    /* Shift Backspace */
+        if (wParam == VK_BACK && (shift_state & 1) == 1) {    /* Shift Backspace */
             /* We do the opposite of what is configured */
             *p++ = (conf_get_bool(conf, CONF_bksp_is_delete) ? 0x08 : 0x7F);
             *p++ = 0;
@@ -4531,7 +4577,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
           case VK_F20: fkey_number = 20; goto numbered_function_key;
           numbered_function_key:
             p += format_function_key((char *)p, term, fkey_number,
-                                     shift_state & 1, shift_state & 2);
+                                     shift_state & 1, shift_state & 2, left_alt);
             return p - output;
 
             SmallKeypadKey sk_key;
@@ -4542,11 +4588,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
           case VK_PRIOR: sk_key = SKK_PGUP; goto small_keypad_key;
           case VK_NEXT: sk_key = SKK_PGDN; goto small_keypad_key;
           small_keypad_key:
-            /* These keys don't generate terminal input with Ctrl */
-            if (shift_state & 2)
-                break;
-
-            p += format_small_keypad_key((char *)p, term, sk_key);
+            p += format_small_keypad_key((char *)p, term, sk_key,
+                                         shift_state & 1, shift_state & 2);
             return p - output;
 
             char xkey;
@@ -4556,7 +4599,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
           case VK_LEFT: xkey = 'D'; goto arrow_key;
           case VK_CLEAR: xkey = 'G'; goto arrow_key; /* close enough */
           arrow_key:
-            p += format_arrow_key((char *)p, term, xkey, shift_state & 2);
+            p += format_arrow_key((char *)p, term, xkey,
+                                  shift_state & 1, shift_state & 2, left_alt);
             return p - output;
 
           case VK_RETURN:
@@ -4570,6 +4614,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
                 *p++ = '\n';
                 return p - output;
             } else {
+                if ((shift_state & 2) && !left_alt) /* Ctrl Return */
+                    *p++ = 0x1B;
                 *p++ = 0x0D;
                 *p++ = 0;
                 return -2;

@@ -785,8 +785,8 @@ void save_open_settings(settings_w *sesskey, Conf *conf)
     write_setting_b(sesskey, "ConnectionSharing", conf_get_bool(conf, CONF_ssh_connection_sharing));
     write_setting_b(sesskey, "ConnectionSharingUpstream", conf_get_bool(conf, CONF_ssh_connection_sharing_upstream));
     write_setting_b(sesskey, "ConnectionSharingDownstream", conf_get_bool(conf, CONF_ssh_connection_sharing_downstream));
-    write_setting_i(sesskey, "DisableCtrlPage", conf_get_int(conf, CONF_no_ctrl_page));
-    write_setting_i(sesskey, "DisableShiftPage", conf_get_int(conf, CONF_no_shift_page));
+    write_setting_b(sesskey, "DisableCtrlPage", conf_get_bool(conf, CONF_no_ctrl_page));
+    write_setting_b(sesskey, "DisableShiftPage", conf_get_bool(conf, CONF_no_shift_page));
     wmap(sesskey, "SSHManualHostKeys", conf, CONF_ssh_manual_hostkeys, false);
 
     /*
@@ -1264,8 +1264,8 @@ void load_open_settings(settings_r *sesskey, Conf *conf)
          conf, CONF_ssh_connection_sharing_upstream);
     gppb(sesskey, "ConnectionSharingDownstream", true,
          conf, CONF_ssh_connection_sharing_downstream);
-    gppi(sesskey, "DisableCtrlPage", 0, conf, CONF_no_ctrl_page);
-    gppi(sesskey, "DisableShiftPage", 0, conf, CONF_no_shift_page);
+    gppb(sesskey, "DisableCtrlPage", false, conf, CONF_no_ctrl_page);
+    gppb(sesskey, "DisableShiftPage", false, conf, CONF_no_shift_page);
     gppmap(sesskey, "SSHManualHostKeys", conf, CONF_ssh_manual_hostkeys);
 
     /*

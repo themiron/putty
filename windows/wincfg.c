@@ -111,12 +111,12 @@ void win_setup_config_box(struct controlbox *b, HWND *hwndp, bool has_help,
     ctrl_checkbox(s, "Control-Alt is different from AltGr", 'd',
                   HELPCTX(keyboard_ctrlalt),
                   conf_checkbox_handler, I(CONF_ctrlaltkeys));
-    ctrl_checkbox(s, "Control-PgUp/PgDown acts as is",
-		  NO_SHORTCUT, HELPCTX(no_help),
-		  conf_checkbox_handler, I(CONF_no_ctrl_page));
-    ctrl_checkbox(s, "Shift-PgUp/PgDown acts as is",
-		  NO_SHORTCUT, HELPCTX(no_help),
-		  conf_checkbox_handler, I(CONF_no_shift_page));
+    ctrl_checkbox(s, "Control-PgUp/PgDown acts as is", NO_SHORTCUT,
+                  HELPCTX(no_help),
+                  conf_checkbox_handler, I(CONF_no_ctrl_page));
+    ctrl_checkbox(s, "Shift-PgUp/PgDown acts as is", NO_SHORTCUT,
+                  HELPCTX(no_help),
+                  conf_checkbox_handler, I(CONF_no_shift_page));
 
     /*
      * Windows allows an arbitrary .WAV to be played as a bell, and

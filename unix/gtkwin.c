@@ -1835,7 +1835,7 @@ gint key_event(GtkWidget *widget, GdkEventKey *event, gpointer data)
           numbered_function_key:
             end = 1 + format_function_key(output+1, inst->term, fkey_number,
                                           event->state & GDK_SHIFT_MASK,
-                                          event->state & GDK_CONTROL_MASK);
+                                          event->state & GDK_CONTROL_MASK, 0);
 #ifdef KEY_EVENT_DIAGNOSTICS
             debug(" - function key F%d", fkey_number);
 #endif
@@ -1856,11 +1856,9 @@ gint key_event(GtkWidget *widget, GdkEventKey *event, gpointer data)
           case GDK_KEY_Page_Down: case GDK_KEY_KP_Page_Down:
             sk_key = SKK_PGDN; goto small_keypad_key;
           small_keypad_key:
-            /* These keys don't generate terminal input with Ctrl */
-            if (event->state & GDK_CONTROL_MASK)
-                break;
-
-            end = 1 + format_small_keypad_key(output+1, inst->term, sk_key);
+            end = 1 + format_small_keypad_key(output+1, inst->term, sk_key,
+                                              event->state & GDK_SHIFT_MASK,
+                                              event->state & GDK_CONTROL_MASK);
 #ifdef KEY_EVENT_DIAGNOSTICS
             debug(" - small keypad key");
 #endif
@@ -1880,7 +1878,8 @@ gint key_event(GtkWidget *widget, GdkEventKey *event, gpointer data)
             xkey = 'G'; goto arrow_key;
           arrow_key:
             end = 1 + format_arrow_key(output+1, inst->term, xkey,
-                                       event->state & GDK_CONTROL_MASK);
+                                       event->state & GDK_SHIFT_MASK,
+                                       event->state & GDK_CONTROL_MASK, 0);
 #ifdef KEY_EVENT_DIAGNOSTICS
             debug(" - arrow key");
 #endif

@@ -1477,8 +1477,8 @@ NORETURN void cleanup_exit(int);
     X(INT, NONE, shadowboldoffset) /* in pixels */ \
     X(BOOL, NONE, crhaslf) \
     X(STR, NONE, winclass) \
-    X(INT, NONE, no_ctrl_page) /* is it special? */ \
-    X(INT, NONE, no_shift_page) /* is it special? */ \
+    X(BOOL, NONE, no_ctrl_page) /* is it special? */ \
+    X(BOOL, NONE, no_shift_page) /* is it special? */ \
     /* end of list */
 
 /* Now define the actual enum of option keywords using that macro. */
@@ -1646,10 +1646,12 @@ void term_get_cursor_position(Terminal *term, int *x, int *y);
 typedef enum SmallKeypadKey {
     SKK_HOME, SKK_END, SKK_INSERT, SKK_DELETE, SKK_PGUP, SKK_PGDN,
 } SmallKeypadKey;
-int format_arrow_key(char *buf, Terminal *term, int xkey, bool ctrl);
+int format_arrow_key(char *buf, Terminal *term, int xkey,
+                     bool shift, bool ctrl, bool alt);
 int format_function_key(char *buf, Terminal *term, int key_number,
-                        bool shift, bool ctrl);
-int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key);
+                        bool shift, bool ctrl, bool alt);
+int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key,
+                            bool shift, bool ctrl);
 int format_numeric_keypad_key(char *buf, Terminal *term, char key,
                               bool shift, bool ctrl);
 

@@ -6799,9 +6799,16 @@ void term_mouse(Terminal *term, Mouse_Button braw, Mouse_Button bcooked,
     term_update(term);
 }
 
-int format_arrow_key(char *buf, Terminal *term, int xkey, bool ctrl)
+int format_arrow_key(char *buf, Terminal *term, int xkey,
+                     bool shift, bool ctrl, bool alt)
 {
     char *p = buf;
+
+    if (term->funky_type == FUNKY_TILDE && !term->vt52_mode && (shift || ctrl || alt)) {
+        char scode = "02563478"[shift + ctrl*2 + alt*4];
+        p += sprintf(p, "\x1B[1;%c%c", scode, xkey);
+        return p - buf;
+    }
 
     if (term->vt52_mode)
         p += sprintf(p, "\x1B%c", xkey);
@@ -6836,7 +6843,7 @@ int format_arrow_key(char *buf, Terminal *term, int xkey, bool ctrl)
 }
 
 int format_function_key(char *buf, Terminal *term, int key_number,
-                        bool shift, bool ctrl)
+                        bool shift, bool ctrl, bool alt)
 {
     char *p = buf;
 
@@ -6851,6 +6858,12 @@ int format_function_key(char *buf, Terminal *term, int key_number,
 
     int index = (shift && key_number <= 10) ? key_number + 10 : key_number;
     int code = key_number_to_tilde_code[index];
+
+    if (term->funky_type == FUNKY_TILDE && !term->vt52_mode && (ctrl || alt)) {
+        char scode = "02563478"[ctrl*2 + alt*4];
+        p += sprintf(p, "\x1B[%d;%c~", code, scode);
+        return p - buf;
+    }
 
     if (term->funky_type == FUNKY_SCO) {
         /* SCO function keys */
@@ -6885,7 +6898,8 @@ int format_function_key(char *buf, Terminal *term, int key_number,
     return p - buf;
 }
 
-int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key)
+int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key,
+                            bool shift, bool ctrl)
 {
     char *p = buf;
 
@@ -6898,6 +6912,17 @@ int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key)
       case SKK_PGUP: code = 5; break;
       case SKK_PGDN: code = 6; break;
       default: unreachable("bad small keypad key enum value");
+    }
+
+    if (term->funky_type == FUNKY_TILDE && !term->vt52_mode && (shift || ctrl)) {
+        char scode = "02563478"[shift + ctrl*2];
+        if (code == 1 || code == 4)
+            p += sprintf(p, "\x1B[1;%c%c", scode, " H..F"[code]);
+        else if (code == 5 || code == 6)
+            p += sprintf(p, "\x1B[%d;%c~", code, scode);
+        else if (!ctrl)
+            p += sprintf(p, "\x1B[%d~", code);
+        return p - buf;
     }
 
     /* Reorder edit keys to physical order */
