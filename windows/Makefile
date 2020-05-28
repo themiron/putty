@@ -1,5 +1,5 @@
-TXTVER = $(shell git describe --tags 2>/dev/null)
-BINVER = $(shell git describe --tags --abbrev=0 2>/dev/null | tr . ,),0,0
+TXTVER = $(shell git describe --tags --exclude 'build-*' 2>/dev/null)
+BINVER = $(shell git describe --tags --exclude 'build-*' --abbrev=0 2>/dev/null | tr . ,),0,0
 COMMIT = $(shell git rev-parse HEAD 2>/dev/null)
 
 all: x64
