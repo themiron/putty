@@ -6859,10 +6859,13 @@ int format_function_key(char *buf, Terminal *term, int key_number,
     int index = (shift && key_number <= 10) ? key_number + 10 : key_number;
     int code = key_number_to_tilde_code[index];
 
-    if (term->funky_type == FUNKY_TILDE && !term->vt52_mode && (ctrl || alt)) {
-        char scode = "02563478"[ctrl*2 + alt*4];
-        p += sprintf(p, "\x1B[%d;%c~", code, scode);
-        return p - buf;
+    if (term->funky_type == FUNKY_TILDE && !term->vt52_mode && (shift || ctrl || alt)) {
+        char scode = "02563478"[shift + ctrl*2 + alt*4];
+        if (ctrl || alt) {
+            code = key_number_to_tilde_code[key_number];
+            p += sprintf(p, "\x1B[%d;%c~", code, scode);
+            return p - buf;
+        }
     }
 
     if (term->funky_type == FUNKY_SCO) {
@@ -6918,10 +6921,8 @@ int format_small_keypad_key(char *buf, Terminal *term, SmallKeypadKey key,
         char scode = "02563478"[shift + ctrl*2];
         if (code == 1 || code == 4)
             p += sprintf(p, "\x1B[1;%c%c", scode, " H..F"[code]);
-        else if (code == 5 || code == 6)
+        else
             p += sprintf(p, "\x1B[%d;%c~", code, scode);
-        else if (!ctrl)
-            p += sprintf(p, "\x1B[%d~", code);
         return p - buf;
     }
 
